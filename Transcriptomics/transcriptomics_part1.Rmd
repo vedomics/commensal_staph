@@ -1,0 +1,253 @@
+---
+title: "RNASeq analysis part 1: differential expression and GO pathway enrichemnt"
+output: html_document
+date: "2023-12-11"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Laura Markey, Dec 11 2023
+# Lieberman Lab, MIT IMES
+# Part of Khadka and Markey et al, 2023. "Commensal skin bacteria exacerbate inflammation and delay healing"
+
+# Transcriptomics part 1:
+# Starting from pseudoaligned transcript abundance from kallisto, analysing data in R to perform differential expression and pathway enrichment
+
+# Other inputs: metadata file to assign samples to conditions; list of genes annotated as "immune" by Mouse Genome Database
+#Blake JA, Baldarelli R, Kadin JA, Richardson JE, Smith CL, Bult CJ, et al. Mouse Genome Database (MGD): Knowledgebase for mouse-human comparative biology. Nucleic Acids Res. 2021 Jan 8;49(D1):D981–7.
+
+# Differential expression analysis using sleuth
+#Pimentel H, Bray NL, Puente S, Melsted P, Pachter L. Differential analysis of RNA-seq incorporating quantification uncertainty. Nat Methods. 2017 Jul;14(7):687–90.
+
+# GO process enrichment analysis using clusterProfiler
+#Wu T, Hu E, Xu S, Chen M, Guo P, Dai Z, et al. clusterProfiler 4.0: A universal enrichment tool for interpreting omics data. Innovation (Camb). 2021 Aug 28;2(3):100141.
+
+# Within R you will start from kallisto pseudo-aligned transcripts and output:
+# -dataframe containing number of genes significantly up/down regulated and whether they are immune or not 
+# -pvalues for Fisher's exact test for enrichment of immune-annotated genes within differentially expressed genes per timepoint, up/down regulated
+# -full table of GO enrichment analysis of immune significantly upregulated genes
+# -full table of GO enrichment analysis on non-immune significantly upregulated genes
+# -counts table of normalized TPM per gene per sample for all samples (used for visualization with python)
+# -differential expression lrt results from d0, d1 and d4 (used for visualization with python)
+
+#script requires data located in data/transcriptomics
+
+#load all packages required
+
+```{r}
+#package versions when relevant
+# ("clusterProfiler_4.10.0")
+# ("org.Mm.eg.db_3.18.0")
+# ("biomaRt_2.58.0")
+# ("sleuth_0.30.1")
+# ("AnnotationDbi_1.64.1")
+# ("IRanges_2.36.0")
+# ("S4Vectors_0.40.2")
+# ("Biobase_2.62.0")
+# ("BiocGenerics_0.48.1")
+# ("DOSE_3.28.1")
+#load all packages required
+library("clusterProfiler")
+library("org.Mm.eg.db")
+library("biomaRt")
+library("sleuth")
+library("stats4")
+library("stats")
+library("graphics")
+library("grDevices")
+library("utils")
+library("datasets")
+library("methods")
+library("base")
+library("AnnotationDbi")
+library("IRanges")
+library("S4Vectors")
+library("Biobase")
+library("BiocGenerics")
+library("DOSE")
+```
+```{r}
+#sleuth set-up: transcript mapping and metadata files
+#read in transcript mapping file 
+#DO NOT USE MOST RECENT RELEASE- this t2g file was built from ENSEMBL release 109
+t2g<-read.csv("/Users/liebermanlab/Dropbox (MIT)/Lieberman Lab/Projects/Commensal_memory_mouse/data_and_code/data/transcriptomics/mouset2g.csv")
+#read in metadata file
+metadata<-read.csv("/Users/liebermanlab/Dropbox (MIT)/Lieberman Lab/Projects/Commensal_memory_mouse/data_and_code/data/transcriptomics/longmeta.csv")
+#add location of kallisto files to metadata file
+metadata<-dplyr::mutate(metadata, path=file.path("/Users/liebermanlab/Dropbox (MIT)/Lieberman Lab/Projects/Commensal_memory_mouse/data_and_code/data/transcriptomics/kallisto_output", sample, "abundance.h5"))
+#relevel the group of metadata so that samples are compared to pbs
+metadata$group<- as.factor(metadata$group)
+metadata$group <- relevel(metadata$group, ref = "pbs")
+```
+
+```{r}
+#get counts tables from gene-level aggregation mode of all samples
+#for comparison to June 2023 results you must make a sleuth object that contains ALL SAMPLES since it sums to 1 million to get tPM
+#includes all samples in analysis including water control
+#if you don't do this you get the same-ish dif expr but different TPM numbers
+allsamples_genemode_so<-sleuth_prep(metadata, target_mapping=t2g, aggregation_column="ens_gene", gene_mode=TRUE)
+#you are getting an endless loop of errors so either fix this "Warning: The melt generic in data.table has been passed a data.frame and will attempt to redirect to the relevant reshape2 method; please note that reshape2 is deprecated, and this redirection is now deprecated as well. To continue using melt methods from reshape2 while both libraries are attached, e.g. melt.list, you can prepend the namespace like reshape2::melt(bs_df). In the next version, this warning will become an error." or run in silent mode
+genelevel_counts<-sleuth_to_matrix(allsamples_genemode_so, "obs_norm", "tpm") #rows are genes columns are samples
+countsflip<-data.frame(t(genelevel_counts))
+countsflip$sample<-rownames(countsflip)
+counts_meta<-merge(metadata,countsflip, by="sample")
+write.csv(counts_meta, "/Users/liebermanlab/Dropbox (MIT)/Lieberman Lab/Projects/Commensal_memory_mouse/data_and_code/data/transcriptomics/allsamples_genecounts.csv") #csv will be used to make heatmaps in python
+```
+```{r}
+#filter metadata that will be used to run sleuth for diff expression to only contain groups of interest (pbs and sepi44)
+metadata<-dplyr::filter(metadata, group == "pbs" | group =="sepi44")
+#split metadata file by timepoint in order to compare only the two groups per timepoint to each other
+d0_meta<- dplyr::filter(metadata, endpoint == 0)
+d1_meta<-dplyr::filter(metadata, endpoint == 1)
+d4_meta<-dplyr::filter(metadata, endpoint == 4)
+```
+```{r}
+#differential expression analysis per day:
+#run sleuth in pvalue aggregation mode for assessing differential expression by likelihood ratio test (qvalues used for downstream analysis)
+so_d0_pvalagg <- sleuth_prep(d0_meta, target_mapping = t2g, aggregation_column = 'ens_gene')
+so_d0_pvalagg<-sleuth_fit(so_d0_pvalagg, ~group, "full")
+so_d0_pvalagg<-sleuth_fit(so_d0_pvalagg, ~1, "reduced")
+so_d0_pvalagg<-sleuth_lrt(so_d0_pvalagg, "reduced", "full")
+d0_lrt_results<-sleuth_results(so_d0_pvalagg, "reduced:full", "lrt")
+
+so_d1_pvalagg <- sleuth_prep(d1_meta, target_mapping = t2g, aggregation_column = 'ens_gene')
+so_d1_pvalagg<-sleuth_fit(so_d1_pvalagg, ~group, "full")
+so_d1_pvalagg<-sleuth_fit(so_d1_pvalagg, ~1, "reduced")
+so_d1_pvalagg<-sleuth_lrt(so_d1_pvalagg, "reduced", "full")
+d1_lrt_results<-sleuth_results(so_d1_pvalagg, "reduced:full", "lrt")
+
+so_d4_pvalagg <- sleuth_prep(d4_meta, target_mapping = t2g, aggregation_column = 'ens_gene')
+so_d4_pvalagg<-sleuth_fit(so_d4_pvalagg, ~cohort, "reduced")
+so_d4_pvalagg<-sleuth_fit(so_d4_pvalagg, ~group+cohort, "full")
+so_d4_pvalagg<-sleuth_lrt(so_d4_pvalagg, "reduced", "full")
+d4_lrt_results<-sleuth_results(so_d4_pvalagg, "reduced:full", "lrt")
+```
+
+
+```{r}
+#manual fold change calculation to split lrt results up/down
+#split counts table by day
+d0counts<-filter(counts_meta, endpoint==0)
+
+#calculate ave per group and foldchange
+d0pbs_ave<-colMeans(filter(d0counts, group=="pbs")[,15:ncol(d0counts)])
+d0sepi_ave<-colMeans(filter(d0counts, group=="sepi44")[15:ncol(d0counts)])
+d0fc<-log2(d0sepi_ave/d0pbs_ave)
+
+d1counts<-filter(counts_meta, endpoint==1)
+d1pbs_ave<-colMeans(filter(d1counts, group=="pbs")[,15:ncol(d1counts)])
+d1sepi_ave<-colMeans(filter(d1counts, group=="sepi44")[15:ncol(d1counts)])
+d1fc<-log2(d1sepi_ave/d1pbs_ave)
+
+d4counts<-filter(counts_meta, endpoint==4)
+d4pbs_ave<-colMeans(filter(d4counts, group=="pbs")[,15:ncol(d4counts)])
+d4sepi_ave<-colMeans(filter(d4counts, group=="sepi44")[15:ncol(d4counts)])
+d4fc<-log2(d4sepi_ave/d4pbs_ave)
+#combine all foldchange into a single dataframe to reference
+foldchangedf<-data.frame(d0=d0fc, d1=d1fc, d4=d4fc)
+foldchangedf$target_id<-rownames(foldchangedf)
+```
+```{r}
+#dereplicating and subsetting differential expression based on immune annotation and direction fold-change
+#background gene list for all timepoints
+genebackground <- d1_lrt_results$target_id
+#read in Mouse Genome Database list of immune-annotated genes
+jaximmune<-read.csv("/Users/liebermanlab/Dropbox (MIT)/Lieberman Lab/Projects/Commensal_memory_mouse/data_and_code/data/transcriptomics/jax_immune_list.csv")
+#dereplicate lrt results
+d0uniquelrt<-dplyr::distinct(d0_lrt_results[,2:7])
+d1uniquelrt<-dplyr::distinct(d1_lrt_results[,2:7])
+d4uniquelrt<-dplyr::distinct(d4_lrt_results[,2:7])
+#write to csv to make volcano plots in python 
+write.csv(d0uniquelrt, file="/Users/liebermanlab/Dropbox (MIT)/Lieberman Lab/Projects/Commensal_memory_mouse/data_and_code/data/transcriptomics/d0lrtresults.csv")
+write.csv(d1uniquelrt, file="/Users/liebermanlab/Dropbox (MIT)/Lieberman Lab/Projects/Commensal_memory_mouse/data_and_code/data/transcriptomics/d1lrtresults.csv")
+write.csv(d4uniquelrt, file="/Users/liebermanlab/Dropbox (MIT)/Lieberman Lab/Projects/Commensal_memory_mouse/data_and_code/data/transcriptomics/d4lrtresults.csv")
+#subset significant immune genes
+d0immune <- dplyr::filter(d0uniquelrt, ext_gene %in% jaximmune$Symbol & qval < 0.05)
+d1immune <- dplyr::filter(d1uniquelrt, ext_gene %in% jaximmune$Symbol & qval < 0.05)
+d4immune <- dplyr::filter(d4uniquelrt, ext_gene %in% jaximmune$Symbol & qval < 0.05)
+#subset significant not-immune genes
+d0notimmune <- dplyr::filter(d0uniquelrt,!ext_gene %in% jaximmune$Symbol & qval < 0.05)
+d1notimmune <- dplyr::filter(d1uniquelrt,!ext_gene %in% jaximmune$Symbol & qval < 0.05)
+d4notimmune <- dplyr::filter(d4uniquelrt,!ext_gene %in% jaximmune$Symbol & qval < 0.05)
+
+#subset lrt results by up/down regulation determined by foldchange
+
+d0_immuneup <- dplyr::filter(d0immune, target_id %in% foldchangedf[foldchangedf$d0 >0,]$target_id)
+d0_immunedown <- dplyr::filter(d0immune, target_id %in% foldchangedf[foldchangedf$d0 <0,]$target_id)
+
+d1_immuneup<- dplyr::filter(d1immune, target_id %in% foldchangedf[foldchangedf$d1 >0,]$target_id)
+d1_immunedown<- dplyr::filter(d1immune, target_id %in% foldchangedf[foldchangedf$d1 <0,]$target_id)
+
+d4_immuneup<- dplyr::filter(d4immune, target_id %in% foldchangedf[foldchangedf$d4 >0,]$target_id)
+d4_immunedown<- dplyr::filter(d4immune, target_id %in% foldchangedf[foldchangedf$d4 <0,]$target_id)
+
+d0_otherup<- dplyr::filter(d0notimmune, target_id %in% foldchangedf[foldchangedf$d0 >0,]$target_id)
+d0_otherdown<- dplyr::filter(d0notimmune, target_id %in% foldchangedf[foldchangedf$d0 <0,]$target_id)
+
+d1_otherup<- dplyr::filter(d1notimmune, target_id %in% foldchangedf[foldchangedf$d1 >0,]$target_id)
+d1_otherdown<- dplyr::filter(d1notimmune, target_id %in% foldchangedf[foldchangedf$d1 <0,]$target_id)
+
+d4_otherup<- dplyr::filter(d4notimmune, target_id %in% foldchangedf[foldchangedf$d4 >0,]$target_id)
+d4_otherdown<- dplyr::filter(d4notimmune, target_id %in% foldchangedf[foldchangedf$d4 <0,]$target_id)
+
+#make a df of number of genes in each category for barplot
+#total up
+d0up_tot<-nrow(filter(d0uniquelrt, qval <0.05 & target_id %in% foldchangedf[foldchangedf$d0 >0,]$target_id))
+d1up_tot<-nrow(filter(d1uniquelrt, qval <0.05 & target_id %in% foldchangedf[foldchangedf$d1 >0,]$target_id))
+d4up_tot<-nrow(filter(d4uniquelrt, qval <0.05 & target_id %in% foldchangedf[foldchangedf$d4 >0,]$target_id))
+#total down
+d0down_tot<-nrow(filter(d0uniquelrt, qval <0.05 & target_id %in% foldchangedf[foldchangedf$d0 <0,]$target_id))
+d1down_tot<-nrow(filter(d1uniquelrt, qval <0.05 & target_id %in% foldchangedf[foldchangedf$d1 <0,]$target_id))
+d4down_tot<-nrow(filter(d4uniquelrt, qval <0.05 & target_id %in% foldchangedf[foldchangedf$d4 <0,]$target_id))
+#immune up
+d0up_imm<-nrow(d0_immuneup)
+d1up_imm<-nrow(d1_immuneup)
+d4up_imm<-nrow(d4_immuneup)
+#immune down
+d0down_imm<-nrow(d0_immunedown)
+d1down_imm<-nrow(d1_immunedown)
+d4down_imm<-nrow(d4_immunedown)
+#make a dataframe
+barplot<-data.frame(endpoint=c(0,1,4), total_up=c(d0up_tot, d1up_tot, d4up_tot), total_down=c(d0down_tot, d1down_tot,d4down_tot), immune_up=c(d0up_imm, d1up_imm, d4up_imm), immune_down=c(d0down_imm, d1down_imm,d4down_imm))
+write.csv(barplot, file="/Users/liebermanlab/Dropbox (MIT)/Lieberman Lab/Projects/Commensal_memory_mouse/data_and_code/data/transcriptomics/immune_total_genenumber_barplot.csv") #this df used in visualization code Fig. 3e
+#make a df to use for Fisher test for immune category enrichment
+#split lrt tables just by up or down
+d0up<-filter(d0uniquelrt, target_id %in% foldchangedf[foldchangedf$d0 >0,]$target_id)
+d1up<-filter(d1uniquelrt, target_id %in% foldchangedf[foldchangedf$d1 >0,]$target_id)
+d4up<-filter(d4uniquelrt, target_id %in% foldchangedf[foldchangedf$d4 >0,]$target_id)
+
+d0down<-filter(d0uniquelrt, target_id %in% foldchangedf[foldchangedf$d0 <0,]$target_id)
+d1down<-filter(d1uniquelrt, target_id %in% foldchangedf[foldchangedf$d1 <0,]$target_id)
+d4down<-filter(d4uniquelrt, target_id %in% foldchangedf[foldchangedf$d4 <0,]$target_id)
+#make contingency tables to test for immune gene enrichment
+#upregulation contingency table
+d0_upcontingency<-data.frame(signif=ifelse(d0up$qval<0.05, "S", "N"), immune=ifelse(d0up$ext_gene %in% jaximmune$Symbol, "i", "noti"))
+d1_upcontingency<-data.frame(signif=ifelse(d1up$qval<0.05, "S", "N"), immune=ifelse(d1up$ext_gene %in% jaximmune$Symbol, "i", "noti"))
+d4_upcontingency<-data.frame(signif=ifelse(d4up$qval<0.05, "S", "N"), immune=ifelse(d4up$ext_gene %in% jaximmune$Symbol, "i", "noti"))
+#downregulation contingency table
+d0_dcontingency<-data.frame(signif=ifelse(d0down$qval<0.05, "S", "N"), immune=ifelse(d0down$ext_gene %in% jaximmune$Symbol, "i", "noti"))
+d1_dcontingency<-data.frame(signif=ifelse(d1down$qval<0.05, "S", "N"), immune=ifelse(d1down$ext_gene %in% jaximmune$Symbol, "i", "noti"))
+d4_dcontingency<-data.frame(signif=ifelse(d4down$qval<0.05, "S", "N"), immune=ifelse(d4down$ext_gene %in% jaximmune$Symbol, "i", "noti"))
+#fisher test pvalues in a dataframe
+immune_fish<-data.frame(endpoint=c(0,1,4), upreg_pval=c(fisher.test(table(d0_upcontingency))$p.value, fisher.test(table(d1_upcontingency))$p.value, fisher.test(table(d4_upcontingency))$p.value), downreg_pval=c(fisher.test(table(d0_dcontingency))$p.value, fisher.test(table(d1_dcontingency))$p.value, fisher.test(table(d4_dcontingency))$p.value))
+write.csv(immune_fish, file="/Users/liebermanlab/Dropbox (MIT)/Lieberman Lab/Projects/Commensal_memory_mouse/data_and_code/data/transcriptomics/fishertest_immunegene_enrichment.csv")
+```
+```{r}
+#clusterProfiler for GO process enrichment 
+#immune gene enrichment
+immune_up_gene_lists<-list(d0=d0_immuneup$target_id, d1=d1_immuneup$target_id, d4=d4_immuneup$target_id)#make named list of sig up immune genes
+immune_enrich<-compareCluster(geneClusters=immune_up_gene_lists,fun=enrichGO, OrgDb=org.Mm.eg.db, ont= "BP", keyType="ENSEMBL", universe=genebackground)
+immune_enrichdf<-data.frame(immune_enrich)
+write.csv(immune_enrichdf, file="/Users/liebermanlab/Dropbox (MIT)/Lieberman Lab/Projects/Commensal_memory_mouse/data_and_code/data/transcriptomics/full_GO_enrichment_upregulated_immunegenes_bytimepoint.csv")
+#Go process enrichment of non-immune upregulated genes
+notimmune_up_genes<-list(d0=d0_otherup$target_id, d1=d1_otherup$target_id, d4=d4_otherup$target_id)
+other_enrich<-compareCluster(geneClusters=notimmune_up_genes,fun=enrichGO, OrgDb=org.Mm.eg.db, ont= "MF", keyType="ENSEMBL", universe=genebackground)
+other_enrichdf<-data.frame(other_enrich)
+write.csv(other_enrichdf, file="/Users/liebermanlab/Dropbox (MIT)/Lieberman Lab/Projects/Commensal_memory_mouse/data_and_code/data/transcriptomics/full_GO_enrichment_nonimmune_upregulated_bytimepoint.csv")
+```
+
+
+
+
