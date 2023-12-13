@@ -1,0 +1,36 @@
+label,Cohort,Mouse,Timepoint,Condition,Group,Crust Score,Dermal Neutrophil Score,Subcutaneous Fat Score,Dermal integrity score,epidermal integrity
+coh25 m1,25,1,Endpoint,noTS,PBS,0,0,0,0,
+coh25 m2,25,2,Endpoint,noTS,PBS,0,0,0,0,
+coh25 m3,25,3,Endpoint,noTS,PBS,0,0,0,0,
+coh25 m4,25,4,Endpoint,noTS,Sepi44,0,0,0,0,
+coh25 m5,25,5,Endpoint,noTS,Sepi44,0,0,0,0,
+coh25 m6,25,6,Endpoint,noTS,Sepi44,0,0,0,0,
+coh25 m7,25,7,Endpoint,noTS,Sepi44,0,0,0,0,
+coh25 m8,25,8,Endpoint,noTS,Sepi44,0,0,0,0,
+coh25 m9,25,9,Endpoint,noTS,Sepi44,0,0,0,0,
+coh14 m3,14,3,Endpoint,tapestrip,PBS,0,0.5,0.5,0,
+spf17 m4,17,4,Endpoint,tapestrip,PBS,0,0.5,0.5,0,
+spf18 m1,18,1,Endpoint,tapestrip,PBS,0,1,1,0,
+spf26 m2,26,2,Endpoint,tapestrip,PBS,1,2,2,0,
+spf26 m3,26,3,Endpoint,tapestrip,PBS,1,2,3,1,
+coh14 m12,14,12,Endpoint,tapestrip,Sepi44,0,0.5,0.5,0,
+coh14 m15,14,15,Endpoint,tapestrip,Sepi44,2,3,3,2,
+spf26 m10,26,10,Endpoint,tapestrip,Sepi44,2,3,3,2,
+spf26 m11,26,11,Endpoint,tapestrip,Sepi44,2,3,3,2,
+spf26 m13,26,13,Endpoint,tapestrip,Sepi44,2,2,3,1,
+SPF28M2,28,2,4h,tapestrip,PBS,0,0.5,0,0,1
+SPF28M3,28,3,4h,tapestrip,PBS,0,0.5,0,0,1
+SPF28M4,28,4,4h,tapestrip,PBS,0,0.5,0,0,1
+SPF28M6,28,6,4h,tapestrip,Sepi44,0,1,1,1,1
+SPF28M7,28,7,4h,tapestrip,Sepi44,0,1,1,0,1
+SPF28M8,28,8,4h,tapestrip,Sepi44,0,1,1,1,1
+SPF28M16,28,16,24h,tapestrip,PBS,1,1,2,2,2
+SPF28M17,28,17,24h,tapestrip,PBS,1,1,2,1,2
+SPF34M1,34,1,24h,tapestrip,PBS,1,2,2,2,2
+SPF34M2,34,2,24h,tapestrip,PBS,0.5,0.5,0.5,1,1
+SPF34M3,34,3,24h,tapestrip,PBS,1,2,2,2,2
+SPF28M20,28,20,24h,tapestrip,Sepi44,1,2,1,3,3
+SPF28M22,28,22,24h,tapestrip,Sepi44,1,3,2,3,3
+SPF34M6,34,6,24h,tapestrip,Sepi44,1,2,1,3,3
+SPF34M8,34,8,24h,tapestrip,Sepi44,1,2,2,3,3
+SPF34M10,34,10,24h,tapestrip,Sepi44,2,2,1,2,3
