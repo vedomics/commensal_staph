@@ -13,7 +13,7 @@ This repository contains all the data (with the exception of raw sequencing data
 1. The <strong> data </strong> folder contains all raw data accessed by code distributed throughout the repository, including: <p>
    <strong>16s_data </strong>: DADA2 output and metadata from running <a href = "https://qiime2.org/"> QIIME2 </a>  on 16s amplicon sequencing data of mouse skin and gut <br> 
     <strong> supplement </strong>: Data used for generating supplemental figures 1-6 and supplemental tables 1 and 2 <br>
-    <strong> transcriptomics </strong>: Processed RNASeq data used for gene and pathway enrichment from damaged mouse skin at three timepoints (4h, 24h, and 4d), as well as undamaged mouse skin <br>
+    <strong> transcriptomics </strong>: Processed RNASeq data used for gene and pathway enrichment from damaged mouse skin at three timepoints (4h, 24h, and 4d) <br>
     As well as TEWL, severity score, and skin CFU data from mouse experiments shown in figures 1-4 <br>
 
 2. The <strong> Data_Visualisation </strong> folder contains an R markdown script that creates all figures in the paper with the exception of Figure 3b and Figure 4b <p>
