@@ -19,4 +19,5 @@ This repository contains all the data (with the exception of raw sequencing data
 2. The <strong> Data_Visualisation </strong> folder contains an R markdown script that creates all figures in the paper with the exception of Figure 3b and Figure 4b <p>
 3. The <strong> Figs </strong> folder contains raw figures produces by the R markdown script above <p>
 4. The <strong> QIIME </strong> folder contains the QIIME2 workflow used for analysing amplicon sequencing data, as well as the classifier used. Note: the classifier used was created by Alex Poret for the publication, ["Cutaneous surgical wounds have distinct microbiomes from intact skin"](https://pubmed.ncbi.nlm.nih.gov/36541798/) and can also be found at the associated [github repository](https://github.com/ajporet/cutaneous_wound_microbiome) <p>
-5. The <strong> Transcriptomics </strong> folder contains code used to analyse RNASeq data, perform differential gene expression analyses, and pathway enrichment analyses. 
+5. The <strong> Transcriptomics </strong> folder contains code used to analyse RNASeq data, perform differential gene expression analyses, and pathway enrichment analyses.
+6. the <strong> Epidermal Thickness </strong> folder contains code used to calculate epidermal thickness from histology images (distance between points)
