@@ -69,7 +69,7 @@ auc_per_mouse = function(tewl_scores, day_to_exclude_past=5) {
   tewl_scores$ID = paste(tewl_scores$Organism, tewl_scores$Cohort, tewl_scores$Mouse, sep = "_")
   
   auc_df_dp = tewl_scores %>%
-    filter(Condition != "Baseline" & Day < day_to_exclude_past) %>%
+    filter(Day > 0 & Day < day_to_exclude_past) %>%
     group_by(Organism, ID, Cohort) %>%
     summarise(TEWL_AUC = auc(Day, TEWL, type = "spline"))
   
@@ -120,7 +120,7 @@ df3 = df3 %>%
    mutate(TEWL_p_sci = format(TEWL_p, scientific = TRUE, digits = 3)) %>%
    mutate(Score_p_sci = format(Score_p, scientific = TRUE, digits = 3)) %>%
     mutate(TEWL_p_rounded = ifelse(TEWL_p < 0.001, "<0.001", round(TEWL_p, 3)),
-         Score_p_rounded = ifelse(Score_p < 0.001, "<0.001", round(TEWL_p, 3)))
+         Score_p_rounded = ifelse(Score_p < 0.001, "<0.001", round(Score_p, 3)))
 
 return(df3)
 }
@@ -926,9 +926,7 @@ ggsave(paste(current_outfolder, "fig2_b.pdf", sep="/"),  device = "pdf", dpi = 5
 
 # Subset and merge all Sepi cohorts and killed cohorts
 
-sepi_cohorts = unique(subset(all_spf, Organism == "Sepi44" & Cohort %!in% c(2, 4, 8, 10, 13, 15, 16, 20, 24,26,32,33,34))$Cohort)
-
-two_sepi_df = subset(all_spf, Cohort %in% c(sepi_cohorts, 12, 14,27, 36, 17, 18, 19, 21, 23, 37) & Organism %in% c("PBS", "Sepi44", "Sepi_NIH", "Sepi105", "Sepi_HeatKilled", "Sepi_EthanolKilled") & Group %!in% c("control0", "group0", "7x_PBS-F", "5X_PBS", "5X_Sepi1e09", "10x_Sepi1e07", "Shominis930", "Sepi_SFB",  "PBS_SFB", "abx_sepi" ,"abx_pbs" ))
+two_sepi_df = subset(all_spf, Cohort %in% c(12, 14,27, 36, 17, 18, 19, 21, 23, 26, 37) & Organism %in% c("PBS", "Sepi_NIH", "Sepi105", "Sepi_HeatKilled", "Sepi_EthanolKilled") & Group %!in% c("control0", "group0", "7x_PBS-F", "5X_PBS", "5X_Sepi1e09", "10x_Sepi1e07", "Shominis930", "Sepi_SFB",  "PBS_SFB", "abx_sepi" ,"abx_pbs", "pbs_nots",  "sepi_nots"))
 
 # Calculate AUCs, normalise, and calculate p values
 sepi_aucs = auc_per_mouse(subset(two_sepi_df, Day <5))
@@ -1951,7 +1949,6 @@ ggplot(subset(sepi_stats, Condition != "Baseline" & Day > 1))+
 
 ### Fig 5c: T-cells data
 
-
 ```{r}
 
 spf1_par = read.csv("../data/supplement/spf1_parent_freqs.csv", header = T)
@@ -2133,3 +2130,67 @@ ggsave(paste(supp_outfolder, "supp_fig6a.pdf", sep="/"),  device = "pdf", dpi = 
 
 ##Fig7 : Immune volcanoes {generated in python}
 ## Fig 8: Flow Gating {generated in FlowJo}
+
+## Response to reviewers
+
+
+## Fig X : Sepi applied once
+
+```{r}
+
+
+sepi1x = subset(all_spf, Cohort %in% c(36,37) & Organism %in% c("Sepi44_1x", "PBS"))
+
+sepi1x_stats = sepi1x %>%
+  group_by(Organism, Day, Condition) %>%
+  mutate(mean = mean(TEWL, na.rm = TRUE)) %>%
+  mutate(sd = sd(TEWL, na.rm=TRUE)) %>%
+  mutate(sem = standard_error(TEWL)) %>%
+  mutate(score_mean = mean(complete_score, na.rm = TRUE)) %>%
+  mutate(score_sem = standard_error(complete_score))
+  # mutate(Day = replace(Day, Condition == "Tapestrip", 0.5)) # wow that worked lmao
+
+
+sepi1x_auc = auc_per_mouse(sepi1x)
+sepi1x_auc_norm = auc_norm(sepi1x_auc)
+
+x_pals = c("PBS" = "#868686FF" , "Sepi44_1x" = "#0073C2FF")
+
+ggplot(sepi1x_auc_norm,aes(x = Organism, y = TEWL_AUC_norm, color=Organism, fill=Organism))+
+    stat_summary(fun.y = median, geom = "errorbar", aes(ymax = ..y.., ymin = ..y.., color = "black"),
+                 width = .6,size = 1, alpha = 0.9)+
+  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 5, alpha = .5, method = "d", position = position_jitter(width = 0.3, seed = 123)) + 
+  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 5, shape = 1, color = "black", stroke = .8, method = "d", position = position_jitter(width = 0.3, seed = 123))+
+  scale_color_manual(values = x_pals)+
+  scale_fill_manual(values= x_pals)+
+  theme_classic()+
+  theme(panel.grid.major = element_blank(),
+        axis.text.x = element_text(size =18), 
+        axis.text.y = element_text(size=18), axis.title = element_text(size = 20), 
+        legend.position = "none",
+        aspect.ratio = 1.25/1,
+        plot.margin=grid::unit(c(0,0,0,0), "pt"),
+        panel.background = element_blank())+
+  labs(y = "Normalized TEWL AUC", x = "")+
+  geom_signif(comparisons = list(c("PBS", "Sepi44_1x")))
+
+
+ggplot(sepi1x_auc_norm,aes(x = Organism, y = Score_AUC_norm, color=Organism, fill=Organism))+
+    stat_summary(fun.y = median, geom = "errorbar", aes(ymax = ..y.., ymin = ..y.., color = "black"),
+                 width = .6,size = 1, alpha = 0.9)+
+  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 5, alpha = .5, method = "d", position = position_jitter(width = 0.3, seed = 123)) + 
+  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 5, shape = 1, color = "black", stroke = .8, method = "d", position = position_jitter(width = 0.3, seed = 123))+
+  scale_color_manual(values = x_pals)+
+  scale_fill_manual(values= x_pals)+
+  theme_classic()+
+  theme(panel.grid.major = element_blank(),
+        axis.text.x = element_text(size =18), 
+        axis.text.y = element_text(size=18), axis.title = element_text(size = 20), 
+        legend.position = "none",
+        aspect.ratio = 1.25/1,
+        plot.margin=grid::unit(c(0,0,0,0), "pt"),
+        panel.background = element_blank())+
+  labs(y = "Normalized Score AUC", x = "")+
+  geom_signif(comparisons = list(c("PBS", "Sepi44_1x")))
+
+```
