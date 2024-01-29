@@ -2194,3 +2194,351 @@ ggplot(sepi1x_auc_norm,aes(x = Organism, y = Score_AUC_norm, color=Organism, fil
   geom_signif(comparisons = list(c("PBS", "Sepi44_1x")))
 
 ```
+
+## S. epi dose response curve
+
+```{r}
+
+sepi_cohorts = unique(subset(all_spf, Organism == "Sepi44" & Cohort %!in% c(4, 8, 10, 13, 15, 16, 20, 24,25, 28,31,32,33,34,36,37))$Cohort)
+
+sepi_dose_response = subset(all_spf, Cohort %in% sepi_cohorts & Organism %in% c("PBS", "Sepi44") & Group %!in% c("control0", "group0", "7x_PBS-F", "5X_PBS", "5X_Sepi1e09", "Shominis930", "Sepi_SFB",  "PBS_SFB", "abx_sepi" ,"abx_pbs" ))
+
+# Have to manually do AUC calculations to include dose data
+
+ sepi_dose_response$ID = paste(sepi_dose_response$Organism, sepi_dose_response$Cohort, sepi_dose_response$Mouse, sep = "_")
+  
+sepi_dose_auc_tewl = sepi_dose_response %>%
+  filter(Condition != "Baseline" & Day < 5) %>%
+  group_by(Organism, ID, Cohort, Dose) %>%
+  summarise(TEWL_AUC = auc(Day, TEWL, type = "spline"))
+  
+sepi_dose_auc_score = sepi_dose_response %>%
+filter(Day > 1 & Day < 5 & !is.na(complete_score)) %>%
+group_by(Organism, ID, Cohort, Dose) %>%
+summarise(Score_AUC = auc(Day, complete_score, type = "spline"))
+
+sepi_dose_auc = left_join(sepi_dose_auc_tewl, sepi_dose_auc_score)
+  
+
+# Now normalise by cohort and dose
+  
+
+  normalised_dose_auc = group_by(filter(sepi_dose_auc, Organism == "PBS"),Cohort) %>%
+    summarise(PBS_TEWLmean = mean(TEWL_AUC, na.rm = TRUE), PBS_scoremean = mean(Score_AUC, na.rm = TRUE)) %>%
+    left_join(sepi_dose_auc, ., by = c("Cohort")) %>%
+    group_by(Cohort) %>%
+    mutate(TEWL_AUC_norm = TEWL_AUC / PBS_TEWLmean,
+           Score_AUC_norm = Score_AUC / PBS_scoremean) %>%
+    select(Organism, ID, Cohort, Dose, TEWL_AUC_norm, Score_AUC_norm)
+
+
+  #Plot only s epi, no PBS necessary
+  
+  plotdf = subset(normalised_dose_auc, Organism == "Sepi44")
+  plotdf$Dose = factor(plotdf$Dose, levels = c(10000000, 100000000, 1000000000))
+  
+ggplot(plotdf,aes(x = Dose, y = TEWL_AUC_norm, color=Organism, fill=Organism))+
+    stat_summary(fun.y = median, geom = "errorbar", aes(ymax = ..y.., ymin = ..y.., color = "black"),
+                 width = .6,size = 1, alpha = 0.9)+
+  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 5, alpha = .5, method = "d", position = position_jitter(width = 0.3, seed = 123)) +
+  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 5, shape = 1, color = "black", stroke = .8, method = "d", position = position_jitter(width = 0.3, seed = 123))+
+  scale_x_discrete(labels= c("1e7", "1e8", "1e9"))+
+  scale_color_manual(values = spf_pals)+
+  scale_fill_manual(values= spf_pals)+
+  theme_classic()+
+  theme(panel.grid.major = element_blank(),
+        axis.text.x = element_text(size =18), 
+        axis.text.y = element_text(size=18), axis.title = element_text(size = 20), 
+        legend.position = "none",
+        aspect.ratio = 1.25/1,
+        plot.margin=grid::unit(c(0,0,0,0), "pt"),
+        panel.background = element_blank())+
+  labs(y = "Normalized TEWL AUC", x = "")
+
+
+ggplot(plotdf,aes(x = Dose, y = Score_AUC_norm, color=Organism, fill=Organism))+
+    stat_summary(fun.y = median, geom = "errorbar", aes(ymax = ..y.., ymin = ..y.., color = "black"),
+                 width = .6,size = 1, alpha = 0.9)+
+  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 5, alpha = .5, method = "d", position = position_jitter(width = 0.3, seed = 123)) + 
+  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 5, shape = 1, color = "black", stroke = .8, method = "d", position = position_jitter(width = 0.3, seed = 123))+
+   scale_x_discrete(labels= c("1e7", "1e8", "1e9"))+
+  scale_color_manual(values = spf_pals)+
+  scale_fill_manual(values= spf_pals)+
+  theme_classic()+
+  theme(panel.grid.major = element_blank(),
+        axis.text.x = element_text(size =18), 
+        axis.text.y = element_text(size=18), axis.title = element_text(size = 20), 
+        legend.position = "none",
+        aspect.ratio = 1.25/1,
+        plot.margin=grid::unit(c(0,0,0,0), "pt"),
+        panel.background = element_blank())+
+  labs(y = "Normalized Score AUC", x = "")
+
+
+
+```
+
+## 1e08 comparison of s epi, s aureus and lacto
+
+```{r}
+
+ low_dose = subset(all_spf, Cohort %in% c(2,3,9) & Organism %!in% c("Sepi21", "Coryne", "S_xylosus") & Dose != "1000000000")
+
+low_dose_auc = auc_per_mouse_d1(low_dose)
+low_dose_auc_norm = auc_norm(low_dose_auc)
+
+
+low_dose_auc_norm$Organism = factor(low_dose_auc_norm$Organism, levels = c("PBS", "L_reuteri", "Sepi44", "S_aureus"))
+
+plotdf = subset(low_dose_auc_norm, Organism != "PBS")
+
+ggplot(plotdf,aes(x = Organism, y = TEWL_AUC_norm, color=Organism, fill=Organism))+
+    stat_summary(fun.y = median, geom = "errorbar", aes(ymax = ..y.., ymin = ..y.., color = "black"),
+                 width = .6,size = 1, alpha = 0.9)+
+  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 5, alpha = .5, method = "d", position = position_jitter(width = 0.3, seed = 123)) + 
+  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 5, shape = 1, color = "black", stroke = .8, method = "d", position = position_jitter(width = 0.3, seed = 123))+
+  scale_color_manual(values = spf_pals)+
+  scale_fill_manual(values= spf_pals)+
+  geom_hline(yintercept = 1)+
+  theme_classic()+
+  theme(panel.grid.major = element_blank(),
+        axis.text.x = element_text(size =18, angle = 45, hjust = 1), 
+        axis.text.y = element_text(size=18), axis.title = element_text(size = 20), 
+        legend.position = "none",
+        aspect.ratio = 1,
+        plot.margin=grid::unit(c(0,0,0,0), "pt"),
+        panel.background = element_blank())+
+  labs(y = "Normalized TEWL AUC", x = "")+
+  geom_signif(comparisons = list(c("L_reuteri", "Sepi44")), color = "black", step = 0.1)
+
+
+ggplot(plotdf,aes(x = Organism, y = Score_AUC_norm, color=Organism, fill=Organism))+
+    stat_summary(fun.y = median, geom = "errorbar", aes(ymax = ..y.., ymin = ..y.., color = "black"),
+                 width = .6,size = 1, alpha = 0.9)+
+  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 5, alpha = .5, method = "d", position = position_jitter(width = 0.3, seed = 123)) + 
+  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 5, shape = 1, color = "black", stroke = .8, method = "d", position = position_jitter(width = 0.3, seed = 123))+
+  scale_color_manual(values = spf_pals)+
+  scale_fill_manual(values= spf_pals)+
+   geom_hline(yintercept = 1)+
+  theme_classic()+
+  theme(panel.grid.major = element_blank(),
+        axis.text.x = element_text(size =18, angle = 45, hjust = 1), 
+        axis.text.y = element_text(size=18), axis.title = element_text(size = 20), 
+        legend.position = "none",
+        aspect.ratio = 1,
+        plot.margin=grid::unit(c(0,0,0,0), "pt"),
+        panel.background = element_blank())+
+  labs(y = "Normalized Score AUC", x = "")+
+  geom_signif(comparisons = list(c("L_reuteri", "Sepi44")), color = "black", step = 0.1)
+
+# Because we only did 1 rep of sepi and saureus, can we combine them?
+
+plotdf$Genus = sapply(plotdf$Organism, function(x) {ifelse(x == "L_reuteri", "Lacto", "Staph")})
+
+ggplot(plotdf,aes(x = Genus, y = TEWL_AUC_norm, color=Organism, fill=Organism))+
+    # stat_summary(fun.y = median, geom = "errorbar", aes(ymax = ..y.., ymin = ..y.., color = "black"),
+                 # width = .6,size = 1, alpha = 0.9)+
+  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 5, alpha = .5, method = "d", position = position_jitter(width = 0.3, seed = 123)) + 
+  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 5, shape = 1, color = "black", stroke = .8, method = "d", position = position_jitter(width = 0.3, seed = 123))+
+  scale_color_manual(values = spf_pals)+
+  scale_fill_manual(values= spf_pals)+
+  geom_hline(yintercept = 1)+
+  theme_classic()+
+  theme(panel.grid.major = element_blank(),
+        axis.text.x = element_text(size =18, angle = 45, hjust = 1), 
+        axis.text.y = element_text(size=18), axis.title = element_text(size = 20), 
+        legend.position = "none",
+        aspect.ratio = 1,
+        plot.margin=grid::unit(c(0,0,0,0), "pt"),
+        panel.background = element_blank())+
+  labs(y = "Normalized TEWL AUC", x = "")+
+  geom_signif(comparisons = list(c("Lacto", "Staph")), color = "black", step = 0.1)
+
+
+ggplot(plotdf,aes(x = Genus, y = Score_AUC_norm, color=Organism, fill=Organism))+
+    # stat_summary(fun.y = median, geom = "errorbar", aes(ymax = ..y.., ymin = ..y.., color = "black"),
+    #              width = .6,size = 1, alpha = 0.9)+
+  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 5, alpha = .5, method = "d", position = position_jitter(width = 0.3, seed = 123)) + 
+  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 5, shape = 1, color = "black", stroke = .8, method = "d", position = position_jitter(width = 0.3, seed = 123))+
+  scale_color_manual(values = spf_pals)+
+  scale_fill_manual(values= spf_pals)+
+   geom_hline(yintercept = 1)+
+  theme_classic()+
+  theme(panel.grid.major = element_blank(),
+        axis.text.x = element_text(size =18, angle = 45, hjust = 1), 
+        axis.text.y = element_text(size=18), axis.title = element_text(size = 20), 
+        legend.position = "none",
+        aspect.ratio = 1,
+        plot.margin=grid::unit(c(0,0,0,0), "pt"),
+        panel.background = element_blank())+
+  labs(y = "Normalized Score AUC", x = "")+
+  geom_signif(comparisons = list(c("Lacto", "Staph")), color = "black", step = 0.1)
+
+```
+
+
+## Sepi + Abx data
+
+```{r}
+
+abx_mice = subset(all_spf, Cohort %in% c(29,34))
+
+# because the split is by group. not organism here, we must tweak our standard functions a little
+
+  abx_mice$ID = paste(abx_mice$Group, abx_mice$Cohort, abx_mice$Mouse, sep = "_")
+  
+  # abx_mice2 = subset(abx_mice, Cohort == 29)
+  
+  auc_df_dp = abx_mice %>%
+    filter(Condition != "Baseline" & Day < 5) %>%
+    group_by(Group, ID, Cohort) %>%
+    summarise(TEWL_AUC = auc(Day, TEWL, type = "spline"))
+  
+    auc_df_dp_score = abx_mice %>%
+    filter(Day > 1 & Day < 5 & !is.na(complete_score)) %>%
+    group_by(Group, ID, Cohort) %>%
+    summarise(Score_AUC = auc(Day, complete_score, type = "spline"))
+
+    abx_aucs = left_join(auc_df_dp, auc_df_dp_score)
+    
+    abx_aucs = subset(abx_aucs, ID %!in% c("ctrl_pbs_29_5", "abx_sepi_29_4", "abx_sepi_29_5")) #this mouse was removed after 1 day and the sepi mice literally died lmao
+  
+# normalise aucs - to controls
+
+  normalised_abx_auc_df = group_by(filter(abx_aucs, Group == "ctrl_pbs"),Cohort) %>%
+    summarise(PBS_TEWLmean = mean(TEWL_AUC, na.rm = TRUE), PBS_scoremean = mean(Score_AUC, na.rm = TRUE)) %>%
+    left_join(abx_aucs, ., by = c("Cohort")) %>%
+    group_by(Cohort) %>%
+    mutate(TEWL_AUC_norm = TEWL_AUC / PBS_TEWLmean,
+           Score_AUC_norm = Score_AUC / PBS_scoremean) %>%
+    select(Group, ID, Cohort, TEWL_AUC_norm, Score_AUC_norm)
+  
+  
+  # get labels
+  
+    normalised_abx_auc_df$Group = factor(normalised_abx_auc_df$Group)
+    
+  df2 = normalised_abx_auc_df
+  abx_auc_labs = data.frame()
+  PBS_tewl = subset(df2,  Group == "ctrl_pbs")$TEWL_AUC_norm
+  PBS_score = subset(df2, Group == "ctrl_pbs")$Score_AUC_norm
+  
+  for (group in unique(subset(df2, Group != "ctrl_pbs")$Group)){
+    org_tewl_norm = subset(df2, Group == group)$TEWL_AUC_norm
+    org_score_nrom = subset(df2, Group == group)$Score_AUC_norm
+    tewl_p = wilcox.test(PBS_tewl, org_tewl_norm)$p.value
+    score_p = wilcox.test(PBS_score, org_score_nrom)$p.value
+    abx_auc_labs = rbind(abx_auc_labs, data.frame("Group" = group, "TEWL_p" = tewl_p, "Score_p" = score_p))
+  } 
+
+
+abx_auc_labs = abx_auc_labs %>%
+  mutate(tewl_label = case_when(TEWL_p > 0.05 ~ "n.s.",
+                                TEWL_p > 0.01 & TEWL_p < 0.05 ~ "*",
+                                TEWL_p > 0.001 & TEWL_p < 0.01 ~ "**",
+                                TEWL_p > 0 & TEWL_p < 0.001 ~ "***")) %>%
+   mutate(score_label = case_when(Score_p > 0.05 ~ "n.s.",
+                                Score_p > 0.01 & Score_p < 0.05 ~ "*",
+                                Score_p > 0.001 & Score_p < 0.01 ~ "**",
+                                Score_p > 0 & Score_p < 0.001 ~ "***")) %>%
+   mutate(TEWL_p_sci = format(TEWL_p, scientific = TRUE, digits = 3)) %>%
+   mutate(Score_p_sci = format(Score_p, scientific = TRUE, digits = 3))
+  
+
+coh29_pals = c("abx_pbs" = "black", "ctrl_pbs" = "grey50", "ctrl_sepi"= "lightblue", "abx_sepi" = "darkblue" )
+ 
+
+
+
+# abx_tewl_auc = 
+  ggplot(normalised_abx_auc_df,aes(x = Group, y = TEWL_AUC_norm, color=Group, fill=Group))+
+    stat_summary(fun.y = median, geom = "errorbar", aes(ymax = ..y.., ymin = ..y.., color = "black"),
+                 width = .6,size = 1, alpha = 0.9)+
+  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 5, alpha = .5, method = "d") + 
+  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 5, shape = 1, color = "black", stroke = .8, method = "d")+
+  scale_color_manual(values = coh29_pals)+
+  scale_fill_manual(values= coh29_pals)+
+  theme_classic()+
+  theme(panel.grid.major = element_blank(),
+        axis.text.x = element_text(size =12, vjust = 1), 
+        axis.text.y = element_text(size=12), axis.title = element_text(size = 20), 
+        legend.position = "none",
+        aspect.ratio = 1.25/1)+
+  # scale_x_discrete(labels = c("PBS", "Antibiotic-treated"))+
+  labs(y = "Normalized TEWL AUC", x = "")
+  # geom_text(data = abx_auc_labs, mapping = aes(x = Group, y = 1.3, label = round(TEWL_p, 3)), color = "black")
+
+
+
+# abx_score_auc = 
+  ggplot(normalised_abx_auc_df,aes(x = Group, y = Score_AUC_norm, color=Group, fill=Group))+
+  # geom_dotplot(binaxis = "y", stackdir = "center", color = "NA", dotsize = 1.25, alpha  = 0.5)+
+  # stat_summary(fun.y = median, geom = "errorbar", aes(ymax = ..y.., ymin = ..y..), width = .3,size = 1.5)+
+    stat_summary(fun.y = median, geom = "errorbar", aes(ymax = ..y.., ymin = ..y.., color = "black"),
+                 width = .6,size = 1, alpha = 0.9)+
+  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 5, alpha = .5, method = "d", position = position_jitter(width = 0.1, seed = 123)) + 
+  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 5, shape = 1, color = "black", stroke = .8, method = "d", position = position_jitter(width = 0.1, seed = 123))+ # note: points were too close together for sina to handle, had to add jitter
+  scale_color_manual(values = coh29_pals)+
+  scale_fill_manual(values= coh29_pals)+
+  theme_classic()+
+  theme(panel.grid.major = element_blank(),
+        axis.text.x = element_text(size =12, vjust = 1), 
+        axis.text.y = element_text(size=12), axis.title = element_text(size = 20), 
+        legend.position = "none",
+        aspect.ratio = 1.25/1)+
+  labs(y = "Normalized Score AUC", x = "")
+  # geom_text(data = abx_auc_labs, mapping = aes(x = Group, y = 2.5, label = round(Score_p, 3)), color = "black")
+
+  
+
+
+```
+
+## Any bacteria that correlated w severity score beyond s. xylosus in abx mice
+
+```{r}
+
+# There are probably more elegant ways to do this, but alas
+
+corr_analysis_ps = subset_samples(skin_samples, Timepoint == "Endpoint")
+
+# Species-only analysis
+
+corr_analysis_ps_sp = tax_glom(corr_analysis_ps, taxrank= "Species")
+corr_analysis_ps_sp = filter_taxa(corr_analysis_ps_sp, function(x) mean(x) > 0.01, TRUE) # taxa greater than 1%
+
+skin_otus = data.frame(t(corr_analysis_ps_sp@otu_table))
+taxadf = data.frame(corr_analysis_ps_sp@tax_table)
+
+
+spf29_auc_norm = subset(normalised_abx_auc_df, Cohort == "29")
+spf29_auc_norm$ID  = sapply(spf29_auc_norm$ID, function(x) {paste(strsplit(x, "_")[[1]][c(1,4)], collapse = "_")})
+skin_otus$Row.names = rownames(skin_otus)
+skin_otus$ID = sapply(skin_otus$Row.names, function(x) {paste(strsplit(x, "_")[[1]][c(3,4)], collapse = "_")})
+
+skin_otus = merge(skin_otus, spf29_auc_norm, by = "ID")
+
+# cor.test(skin_otus[,2], skin_otus$Score, method = "pearson")
+
+cordf_sp = data.frame()
+for (col in c(2:4)){
+  taxa = colnames(skin_otus)[col]
+  taxa = ifelse(startsWith(taxa, "X"), substr(taxa,2,nchar(taxa)), taxa)
+  taxa_names = taxadf[rownames(taxadf) == taxa,]
+  sciname = paste(taxa_names$Genus, taxa_names$Species, sep = ".")
+  cortest = cor.test(skin_otus[,col], skin_otus[,9], method = "pearson")
+  cordf_sp = rbind(cordf_sp, data.frame("Taxa" = sciname, "Corr" = as.numeric(cortest$estimate), "P" = cortest$p.value))
+}
+
+# Lets do a quick BH correction
+
+cordf_bh = cordf_sp[order(cordf_sp$P),]
+cordf_bh$k_m_a = (seq(1,nrow(cordf_bh),1)/nrow(cordf_bh))* 0.05 #this is the critical value
+cordf_bh$BH = cordf_bh$P < cordf_bh$k_m_a
+
+
+
+
+
+
+```
