@@ -2133,7 +2133,6 @@ ggsave(paste(supp_outfolder, "supp_fig6a.pdf", sep="/"),  device = "pdf", dpi = 
 
 ## Response to reviewers
 
-
 ## Fig X : Sepi applied once
 
 ```{r}
@@ -2533,10 +2532,8 @@ for (col in c(2:4)){
 # Lets do a quick BH correction
 
 cordf_bh = cordf_sp[order(cordf_sp$P),]
-cordf_bh$k_m_a = (seq(1,nrow(cordf_bh),1)/nrow(cordf_bh))* 0.05 #this is the critical value
+cordf_bh$k_m_a = (seq(1,nrow(cordf_bh),1)/nrow(cordf_bh))* 0.05 #this is the critical value (rank / total obs * alpha value)
 cordf_bh$BH = cordf_bh$P < cordf_bh$k_m_a
-
-
 
 
 
