@@ -707,6 +707,7 @@ ggsave(paste(current_outfolder, "fig1_d_2.pdf", sep="/"),  device = "pdf", dpi =
 ```{r}
 
 # Calculate AUCs
+xylo = subset(all_spf, Cohort %in% c(3, 7, 27) & Organism %in% c("PBS", "S_xylosus"))
 xylo_aucs = auc_per_mouse(xylo)
 xylo_aucs_norm = auc_norm(xylo_aucs)
 xylo_aucs_labs = sig_labels_auc_norm(xylo_aucs_norm)
@@ -821,7 +822,7 @@ Human skin commensals including S. epidermidis delay barrier repair.
 
 # Subset the correct data
 
- all_bugs = subset(all_spf, Cohort %!in% c(2, 4, 8, 10, 12, 13, 15, 16, 20, 21, 23, 24, 29, 31,32,33) & Organism %!in% c("Sepi44_Formalin", "L_reuteri_supernatant","Sepi_EthanolKilled", "EK_Staph_hominis930", "EK_Staph_hominis931", "Sepi_HeatKilled", "Coryne", "C_tuberculostericum", "Staph_hominis931", "Sepi_NIH", "Sepi105", "Sepi44_1x") & Group %!in% c("5X_PBS", "10x_Sepi1e07") & Day < 5)
+ all_bugs = subset(all_spf, Cohort %!in% c(2, 4, 8, 10, 12, 13, 15, 16, 20, 21, 23, 24, 29, 31,32,33,34,35,37) & Organism %!in% c("Sepi44_Formalin", "L_reuteri_supernatant","Sepi_EthanolKilled", "EK_Staph_hominis930", "EK_Staph_hominis931", "Sepi_HeatKilled", "Coryne", "C_tuberculostericum", "Staph_hominis931", "Sepi_NIH", "Sepi105", "Sepi44_1x") & Group %!in% c("5X_PBS", "10x_Sepi1e07", "pbs_nots", "sepi_nots", "abx_pbs","ctrl_pbs","control0","group0" ) & Day < 5)
 
 
 # AUC normalised to each group's own PBS
@@ -926,12 +927,18 @@ ggsave(paste(current_outfolder, "fig2_b.pdf", sep="/"),  device = "pdf", dpi = 5
 
 # Subset and merge all Sepi cohorts and killed cohorts
 
+# merge all sepi cohorts and killed cohorts
+
 two_sepi_df = subset(all_spf, Cohort %in% c(12, 14,27, 36, 17, 18, 19, 21, 23, 26, 37) & Organism %in% c("PBS", "Sepi_NIH", "Sepi105", "Sepi_HeatKilled", "Sepi_EthanolKilled") & Group %!in% c("control0", "group0", "7x_PBS-F", "5X_PBS", "5X_Sepi1e09", "10x_Sepi1e07", "Shominis930", "Sepi_SFB",  "PBS_SFB", "abx_sepi" ,"abx_pbs", "pbs_nots",  "sepi_nots"))
 
-# Calculate AUCs, normalise, and calculate p values
+# Remove one outlier mouse that was removed after d0, and mice that were removed for being weird outliers
+
+two_sepi_df = subset(two_sepi_df, !(Mouse == 5 & Group == "PBS" & Cohort == 12)& !(Mouse == 3 & Cohort ==17 & Group == "Sepi_HeatKilled")& !(Mouse == 4 & Cohort ==17 & Group == "Sepi_HeatKilled"))
+
 sepi_aucs = auc_per_mouse(subset(two_sepi_df, Day <5))
 sepi_acus_norm = auc_norm(sepi_aucs)
 sepi_aucs_labs = sig_labels_auc_norm(sepi_acus_norm)
+
 sepi_acus_norm = subset(sepi_acus_norm, Organism %!in%  c("PBS", "Sepi44"))
 sepi_aucs_labs = subset(sepi_aucs_labs, Organism %!in%  c( "Sepi44"))
 
@@ -1248,7 +1255,7 @@ thicc = read.csv("../data/supplement/forvk_ave_thickness_histology.csv")
 
 ggplot(subset(thicc, group %in% c("PBS", "Sepi44")), aes(x = thickness, y = score))+
     stat_smooth( method = "lm", stat = "identity", color = "grey40", alpha = 0.1, lwd = 2)+
-  geom_jitter(aes(color = group), size = 6, alpha = 0.6)+
+  geom_point(aes(color = group), size = 6, alpha = 0.6)+
   scale_color_manual(values = spf_pals)+
   labs(x = "Epidermal Thickness", y = "Severity Score")+
   scale_y_continuous(limits = c(0,8), breaks = seq(0, 8,1))+
@@ -1289,6 +1296,39 @@ ggsave(paste(supp_outfolder, "supp_fig1e.pdf", sep="/"),  device = "pdf", dpi = 
 
 
 ```
+
+### Fig. 1f: Endpoint CFU for S. epi colonised mice
+
+```{r}
+
+sepi_cfu = read.csv("../data/supplement/staph_cfu2.csv", header = TRUE)
+
+# Add pseudocounts to our columns of interest to make plotting easier
+
+sepi_cfu$sepi_cfu_per_g = sapply(sepi_cfu$sepi_cfu_per_g, function(x) {ifelse(x == 0, 1, x)})
+sepi_cfu$sepi_cfu_per_g = as.integer(sepi_cfu$sepi_cfu_per_g)
+
+sepi_cfu = na.omit(sepi_cfu) #otherwise plotting is insane
+
+
+ggplot(subset(sepi_cfu, Organism  == "Sepi44"), aes(x = sepi_cfu_per_g, y = skin_score))+
+  geom_point(aes(color = Organism), size = 4, alpha = 0.6)+
+  stat_smooth( method = "lm", color = "grey40", alpha = 0.1, lwd = 2 )+
+  scale_x_log10("CFU/g",
+        breaks = trans_breaks("log10", function(x) 10^x),
+        labels = trans_format("log10", math_format(10^.x)))+
+  scale_color_manual(values = spf_pals)+
+  theme_classic()+
+  theme(legend.position = "bottom", aspect.ratio = 1, strip.background = element_blank())+
+   stat_cor(label.y = 1, label.x = 1.5, method = "spearman")
+
+ggsave(paste(supp_outfolder, "supp_fig1f.pdf", sep="/"),  device = "pdf", dpi = 500,height = 6, width = 8 ,useDingbats = FALSE )
+
+
+
+```
+
+
 
 ## Figure 2:
 
