@@ -31,7 +31,7 @@ library("speedyseq")
 library("forcats")
 library("qiime2R")
 library("reshape2")
-library("ggpmisc")
+
 
 # Global mini functions and defaults
 
@@ -1322,6 +1322,18 @@ ggplot(subset(sepi_cfu, Organism  == "Sepi44"), aes(x = sepi_cfu_per_g, y = skin
   theme(legend.position = "bottom", aspect.ratio = 1, strip.background = element_blank())+
    stat_cor(label.y = 1, label.x = 1.5, method = "spearman")
 
+
+ggplot(subset(sepi_cfu, Organism  == "Sepi44"), aes(x = sepi_cfu_per_g, y = skin_score))+
+  geom_point(aes(color = Organism), size = 4, alpha = 0.6)+
+  stat_smooth( method = "lm", color = "grey40", alpha = 0.1, lwd = 2 )+
+  # scale_x_log10("CFU/g",
+  #       breaks = trans_breaks("log10", function(x) 10^x),
+  #       labels = trans_format("log10", math_format(10^.x)))+
+  scale_color_manual(values = spf_pals)+
+  theme_classic()+
+  theme(legend.position = "bottom", aspect.ratio = 1, strip.background = element_blank())+
+   stat_cor(label.y = 1, label.x = 1.5)
+
 ggsave(paste(supp_outfolder, "supp_fig1_f.pdf", sep="/"),  device = "pdf", dpi = 500,height = 6, width = 8 ,useDingbats = FALSE )
 
 
@@ -1511,7 +1523,7 @@ ggsave(paste(supp_outfolder, "supp_fig2_b_2.pdf", sep=""),  device = "pdf", dpi 
 
 ```{r}
 
- low_dose = subset(all_spf, Cohort %in% c(2,3,9) & Organism %!in% c("Sepi21", "Coryne", "S_xylosus") & Dose != "1000000000")
+ low_dose = subset(all_spf, Cohort %in% c(2,3,7,9,11,14) & Organism %!in% c("Sepi21", "Coryne", "S_xylosus") & Dose != "1000000000")
 
 low_dose_auc = auc_per_mouse(low_dose)
 low_dose_auc_norm = auc_norm(low_dose_auc)
@@ -1649,6 +1661,9 @@ ggsave(paste(supp_outfolder, "supp_fig2_d.pdf", sep=""),  device = "pdf", dpi = 
 
 sepi_comp2 = subset(sepi_cfu, Organism %in% c("Sepi44", "Sepi_NIH", "Sepi105"))
 
+sepi_comp2 %>%
+  group_by(Organism) %>%
+  count(Organism)
 
 ggplot(sepi_comp2, aes(x = Organism, y = sepi_cfu_per_g, color = Organism, Fill = Organism))+
    stat_summary(fun.y = median, geom = "errorbar", aes(ymax = ..y.., ymin = ..y.., color = "black"),
