@@ -833,6 +833,11 @@ aucs_labs = sig_labels_auc_norm(all_bugs_aucs_norm)
 
 all_bugs_aucs_norm$Organism = factor(all_bugs_aucs_norm$Organism, levels= c( "PBS", "Sepi44", "S_xylosus", "S_aureus", "Staph_hominis930", "C_accolens", "L_reuteri", "B_subtilis", "E_coli"))
 
+# Different ordering scheme
+# all_bugs_aucs_norm$Organism = factor(all_bugs_aucs_norm$Organism, levels= c( "PBS", "Sepi44", "S_aureus", "Staph_hominis930", "S_xylosus", "C_accolens", "L_reuteri",  "E_coli","B_subtilis"))
+
+# aucs_labs$Organism = factor(aucs_labs$Organism, levels= c("Sepi44", "S_aureus", "Staph_hominis930", "S_xylosus", "C_accolens", "L_reuteri",  "E_coli","B_subtilis"))
+
 aucs_labs$Organism = factor(aucs_labs$Organism, levels= c("Sepi44", "S_aureus", "S_xylosus", "Staph_hominis930", "C_accolens", "L_reuteri", "B_subtilis", "E_coli"))
 
 # Prepare data for plotting and calculate pvalues
@@ -887,6 +892,7 @@ fig1b = fig1b %>%
   scale_fill_manual(values= fg1b_cols)+
   scale_y_continuous(breaks = c(0.5, 1.0, 1.5, 2.0))+
   scale_x_discrete(labels = c(expression(italic("S. epidermidis")), expression(italic("S. xylosus")), expression(italic("S. aureus")), expression(italic("S. hominis")), expression(italic("C. accolens")), expression(italic("L. reuteri")), expression(italic("B. subtilis")), expression(italic("E. coli"))))+
+    # scale_x_discrete(labels = c(expression(italic("S. epidermidis")), expression(italic("S. aureus")), expression(italic("S. hominis")),expression(italic("S. xylosus")), expression(italic("C. accolens")), expression(italic("L. reuteri")), expression(italic("E. coli")), expression(italic("B. subtilis"))))+
   labs(y = "Normalized TEWL AUC", x = "")+
   geom_text(data = fig1b_labs, mapping = aes(x = Organism, y = 2.3, label = TEWL_p_rounded))
 
@@ -912,6 +918,7 @@ fig1b = fig1b %>%
   scale_color_manual(values = fg1b_cols)+
   scale_fill_manual(values= fg1b_cols)+
   scale_x_discrete(labels = c(expression(italic("S. epidermidis")), expression(italic("S. xylosus")), expression(italic("S. aureus")), expression(italic("S. hominis")), expression(italic("C. accolens")), expression(italic("L. reuteri")), expression(italic("B. subtilis")), expression(italic("E. coli"))))+
+    # scale_x_discrete(labels = c(expression(italic("S. epidermidis")), expression(italic("S. aureus")), expression(italic("S. hominis")),expression(italic("S. xylosus")), expression(italic("C. accolens")), expression(italic("L. reuteri")), expression(italic("E. coli")), expression(italic("B. subtilis"))))+
   labs(y = "Normalized Score AUC", x = "")+
     scale_y_continuous(limits = c(0.3, 3.8), breaks = seq(0.5,3,0.5))+
   geom_text(data = fig1b_labs, mapping = aes(x = Organism, y = 3.5, label = Score_p_rounded))
@@ -2320,6 +2327,7 @@ sepi_stats = sepi_df %>%
   mutate(score_sem = standard_error(complete_score))
 
 #Plot
+
 ggplot(subset(sepi_stats, Condition != "Baseline"))+
   geom_point(aes(x = Day, y = mean, group=Organism,color = Organism), size = 4)+
   scale_color_manual(values = spf_pals, labels = c(expression("PBS"), expression(italic("S. epidermidis"))))+
@@ -2364,6 +2372,11 @@ ggplot(subset(sepi_stats, Condition != "Baseline" & Day > 1))+
  ggsave(paste(supp_outfolder, "supp_fig6_b.pdf", sep="/"),  device = "pdf", dpi = 500,height = 6, width = 8 ,useDingbats = FALSE )
 
 
+ 
+ 
+ 
+ 
+ 
 ```
 
 ### Fig 6: T-cells data
@@ -2513,7 +2526,6 @@ multi_elisa_labs = multi_elisa_melt %>%
 
 # gotta bonferroni the elisa w FDR 0.05
 
-
 multi_bh = multi_elisa_labs[order(multi_elisa_labs$p_value),]
 multi_bh$k_m_a = (seq(1,nrow(multi_bh),1)/nrow(multi_bh))* 0.05 #this is the critical value
 multi_bh$BH = multi_bh$p_value < multi_bh$k_m_a
@@ -2543,6 +2555,34 @@ ggplot(multi_elisa_melt, aes(x = Protein, y = value ))+
   labs(x = "", y = "Protein ng/mL norm to total")
 
 ggsave(paste(supp_outfolder, "supp_fig7_a.pdf", sep="/"),  device = "pdf", dpi = 500,height = 6, width = 8 ,useDingbats = FALSE )
+
+
+# for other visualisation purposes
+multi_elisa_melt$Protein = sapply(multi_elisa_melt$Protein, function(x) {ifelse (x == "IL12.P70", "IL.12", x)})
+multi_elisa_melt_lo = subset(multi_elisa_melt, cutoff == "LO" )
+
+
+multi_elisa_melt_lo$Protein = factor(multi_elisa_melt_lo$Protein , levels = c("GM.CSF", "IL.12", "IL.4", "IL.5", "IL.13", "TGF.B", "IFN.G", "IL.1B", "il.17", "il.23", "il.27"))
+
+ggplot(multi_elisa_melt_lo, aes(x = Protein, y = value ))+
+  geom_boxplot(aes(color=Group, fill = Group), alpha = 0.5, color = "grey20", lwd = .3)+
+  theme_classic()+
+    theme(panel.grid.major = element_blank(),
+          strip.background = element_blank(),
+          axis.text.x = element_text(size =15, hjust = 1, vjust = 1, angle = 30), 
+          axis.text.y = element_text(size=12), axis.title = element_text(size = 20), 
+          legend.position = "none",
+          aspect.ratio = 1/1.5)+
+  scale_x_discrete(labels = c("GM-CSF", "IL-12", "IL-4", "IL-5", "IL-13", "TGF-b", "IFN-g", "IL-1b", "IL-17", "IL-23", "IL-27"))+
+  # facet_wrap(cutoff~., scales = "free")+
+  scale_color_manual(values = spf_pals)+
+  annotate("segment", x = 8.75, xend = 9.5, y = 10, yend = 10, color = "black", linewidth = 1.25)+
+  annotate("text", x = 9.15, y = 12, label = "*", size = unit(14, "pt"))+
+  scale_fill_manual(values = spf_pals)+
+  labs(x = "", y = "Protein ng/mL norm to total")
+
+
+
 
 
 ```
