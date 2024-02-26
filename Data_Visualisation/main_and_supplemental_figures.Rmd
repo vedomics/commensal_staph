@@ -1316,9 +1316,9 @@ sepi_cfu$sepi_cfu_per_g = sapply(sepi_cfu$sepi_cfu_per_g, function(x) {ifelse(x 
 sepi_cfu$sepi_cfu_per_g = as.integer(sepi_cfu$sepi_cfu_per_g)
 
 sepi_cfu = na.omit(sepi_cfu) #otherwise plotting is insane
+sepi_cfu$log = log10(sepi_cfu$sepi_cfu_per_g)
 
-
-ggplot(subset(sepi_cfu, Organism  == "Sepi44"), aes(x = sepi_cfu_per_g, y = skin_score))+
+ggplot(subset(sepi_cfu, Organism  == "Sepi44"& Day == "4"), aes(x = sepi_cfu_per_g, y = skin_score))+
   geom_point(aes(color = Organism), size = 4, alpha = 0.6)+
   stat_smooth( method = "lm", color = "grey40", alpha = 0.1, lwd = 2 )+
   scale_x_log10("CFU/g",
@@ -1330,7 +1330,19 @@ ggplot(subset(sepi_cfu, Organism  == "Sepi44"), aes(x = sepi_cfu_per_g, y = skin
    stat_cor(label.y = 1, label.x = 1.5, method = "spearman")
 
 
-ggplot(subset(sepi_cfu, Organism  == "Sepi44"), aes(x = sepi_cfu_per_g, y = skin_score))+
+ggplot(subset(sepi_cfu, Organism  == "Sepi44" & Day == "4"), aes(x = sepi_cfu_per_g, y = skin_tewl))+
+  geom_point(aes(color = Organism), size = 4, alpha = 0.6)+
+  stat_smooth( method = "lm", color = "grey40", alpha = 0.1, lwd = 2 )+
+  # scale_x_log10("CFU/g",
+  #       breaks = trans_breaks("log10", function(x) 10^x),
+  #       labels = trans_format("log10", math_format(10^.x)))+
+  scale_color_manual(values = spf_pals)+
+  theme_classic()+
+  theme(legend.position = "bottom", aspect.ratio = 1, strip.background = element_blank())+
+   stat_cor(label.y = 1, label.x = 1.5, method = "spearman")
+
+
+ggplot(subset(sepi_cfu, Organism  == "Sepi44" & Day == "4"), aes(x = sepi_cfu_per_g, y = skin_score))+
   geom_point(aes(color = Organism), size = 4, alpha = 0.6)+
   stat_smooth( method = "lm", color = "grey40", alpha = 0.1, lwd = 2 )+
   # scale_x_log10("CFU/g",
@@ -1342,6 +1354,8 @@ ggplot(subset(sepi_cfu, Organism  == "Sepi44"), aes(x = sepi_cfu_per_g, y = skin
    stat_cor(label.y = 1, label.x = 1.5)
 
 ggsave(paste(supp_outfolder, "supp_fig1_f.pdf", sep="/"),  device = "pdf", dpi = 500,height = 6, width = 8 ,useDingbats = FALSE )
+
+
 
 
 
@@ -1375,7 +1389,6 @@ sepi_dose_auc = left_join(sepi_dose_auc_tewl, sepi_dose_auc_score)
 
 # Now normalise by cohort and dose
   
-
   normalised_dose_auc = group_by(filter(sepi_dose_auc, Organism == "PBS"),Cohort) %>%
     summarise(PBS_TEWLmean = mean(TEWL_AUC, na.rm = TRUE), PBS_scoremean = mean(Score_AUC, na.rm = TRUE)) %>%
     left_join(sepi_dose_auc, ., by = c("Cohort")) %>%
@@ -1383,6 +1396,16 @@ sepi_dose_auc = left_join(sepi_dose_auc_tewl, sepi_dose_auc_score)
     mutate(TEWL_AUC_norm = TEWL_AUC / PBS_TEWLmean,
            Score_AUC_norm = Score_AUC / PBS_scoremean) %>%
     select(Organism, ID, Cohort, Dose, TEWL_AUC_norm, Score_AUC_norm)
+  
+
+  
+# Create a new class of dose that is just both low doses lumped together - this is for both plotting and stats purposes
+  
+mini_low_dose_df = subset(normalised_dose_auc, Dose < 10^9 & Organism == "Sepi44")
+mini_low_dose_df$Dose[] <- 10 #placeholder value
+mini_low_dose_df$Dose = as.integer(mini_low_dose_df$Dose)
+  
+normalised_dose_auc = rbind(normalised_dose_auc, mini_low_dose_df)
   
  # P vals  
 df2 = normalised_dose_auc
@@ -1406,14 +1429,14 @@ dose_auc_labs = dose_auc_labs %>%
   #Plot only s epi, no PBS necessary
   
   plotdf = subset(normalised_dose_auc, Organism == "Sepi44")
-  plotdf$Dose = factor(plotdf$Dose, levels = c(10000000, 100000000, 1000000000))
+  plotdf$Dose = factor(plotdf$Dose, levels = c(10,10000000, 100000000, 1000000000))
   
 ggplot(plotdf,aes(x = Dose, y = TEWL_AUC_norm, color=Organism, fill=Organism))+
   geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 5, alpha = .5, method = "d", position = position_jitter(width = 0.3, seed = 123)) +
   geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 5, shape = 1, color = "black", stroke = .8, method = "d", position = position_jitter(width = 0.3, seed = 123))+
   stat_summary(fun.y = median, geom = "errorbar", aes(ymax = ..y.., ymin = ..y.., color = "black"),
                  width = .6,size = 1, alpha = 0.9)+
-  scale_x_discrete(labels= c("1e7", "1e8", "1e9"))+
+  scale_x_discrete(labels= c("Low","1e7", "1e8", "1e9"))+
   scale_color_manual(values = spf_pals)+
   scale_fill_manual(values= spf_pals)+
   theme_classic()+
@@ -1425,6 +1448,7 @@ ggplot(plotdf,aes(x = Dose, y = TEWL_AUC_norm, color=Organism, fill=Organism))+
         plot.margin=grid::unit(c(0,0,0,0), "pt"),
         panel.background = element_blank())+
   geom_hline(yintercept = 1)+
+  annotate("text", x = 1, y = 2, label = "0.02")+
   labs(y = "Normalized TEWL AUC", x = "")
 
 ggsave(paste(supp_outfolder, "supp_fig2_a_1.pdf", sep=""),  device = "pdf", dpi = 500, useDingbats = FALSE )
@@ -1435,7 +1459,7 @@ ggplot(plotdf,aes(x = Dose, y = Score_AUC_norm, color=Organism, fill=Organism))+
                  width = .6,size = 1, alpha = 0.9)+
   geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 5, alpha = .5, method = "d", position = position_jitter(width = 0.3, seed = 123)) + 
   geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 5, shape = 1, color = "black", stroke = .8, method = "d", position = position_jitter(width = 0.3, seed = 123))+
-   scale_x_discrete(labels= c("1e7", "1e8", "1e9"))+
+   scale_x_discrete(labels= c("low","1e7", "1e8", "1e9"))+
   scale_color_manual(values = spf_pals)+
   scale_fill_manual(values= spf_pals)+
   theme_classic()+
@@ -1447,6 +1471,7 @@ ggplot(plotdf,aes(x = Dose, y = Score_AUC_norm, color=Organism, fill=Organism))+
         plot.margin=grid::unit(c(0,0,0,0), "pt"),
         panel.background = element_blank())+
    geom_hline(yintercept = 1)+
+  annotate("text", label = "<0.001", x = 1, y = 3)+
   labs(y = "Normalized Score AUC", x = "")
 
 
@@ -1455,7 +1480,7 @@ ggsave(paste(supp_outfolder, "supp_fig2_a_2.pdf", sep=""),  device = "pdf", dpi 
 
 ```
 
-### Figure 2d: Sepi applied once and S. epi strains
+### Figure 2d: Sepi applied once 
 
 
 ```{r}
@@ -1475,16 +1500,22 @@ sepi1x_stats = sepi1x %>%
 
 sepi1x_auc = auc_per_mouse(sepi1x)
 sepi1x_auc_norm = auc_norm(sepi1x_auc)
+sepi_1x_labs = sig_labels_auc_norm(sepi1x_auc_norm)
 
 x_pals = c("PBS" = "#868686FF" , "Sepi44_1x" = "#0073C2FF")
 
-ggplot(sepi1x_auc_norm,aes(x = Organism, y = TEWL_AUC_norm, color=Organism, fill=Organism))+
+sepi1x_auc_norm_melt = melt(sepi1x_auc_norm, id = c("Organism", "ID", "Cohort"))
+colnames(sepi1x_auc_norm_melt)[c(4,5)] = c("Metric", "Value")
+sepi1x_auc_norm_melt = subset(sepi1x_auc_norm_melt, Organism != "PBS")
+
+ggplot(sepi1x_auc_norm_melt,aes(x = Metric, y = Value, color=Organism, fill=Organism))+
     stat_summary(fun.y = median, geom = "errorbar", aes(ymax = ..y.., ymin = ..y.., color = "black"),
                  width = .6,size = 1, alpha = 0.9)+
   geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 5, alpha = .5, method = "d", position = position_jitter(width = 0.3, seed = 123)) + 
   geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 5, shape = 1, color = "black", stroke = .8, method = "d", position = position_jitter(width = 0.3, seed = 123))+
   scale_color_manual(values = x_pals)+
   scale_fill_manual(values= x_pals)+
+  scale_x_discrete(labels = c("TEWL", "Score"))+
   theme_classic()+
   theme(panel.grid.major = element_blank(),
         axis.text.x = element_text(size =18), 
@@ -1493,141 +1524,13 @@ ggplot(sepi1x_auc_norm,aes(x = Organism, y = TEWL_AUC_norm, color=Organism, fill
         aspect.ratio = 1.25/1,
         plot.margin=grid::unit(c(0,0,0,0), "pt"),
         panel.background = element_blank())+
-  labs(y = "Normalized TEWL AUC", x = "")+
+  labs(y = "Normalized AUC", x = "")+
    geom_hline(yintercept = 1)+
-  geom_signif(comparisons = list(c("PBS", "Sepi44_1x")), tip_length = 0)
-
-ggsave(paste(supp_outfolder, "supp_fig2_b_1.pdf", sep=""),  device = "pdf", dpi = 500, useDingbats = FALSE )
-
-
-ggplot(sepi1x_auc_norm,aes(x = Organism, y = Score_AUC_norm, color=Organism, fill=Organism))+
-    stat_summary(fun.y = median, geom = "errorbar", aes(ymax = ..y.., ymin = ..y.., color = "black"),
-                 width = .6,size = 1, alpha = 0.9)+
-  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 5, alpha = .5, method = "d", position = position_jitter(width = 0.3, seed = 123)) + 
-  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 5, shape = 1, color = "black", stroke = .8, method = "d", position = position_jitter(width = 0.3, seed = 123))+
-  scale_color_manual(values = x_pals)+
-  scale_fill_manual(values= x_pals)+
-  theme_classic()+
-  theme(panel.grid.major = element_blank(),
-        axis.text.x = element_text(size =18), 
-        axis.text.y = element_text(size=18), axis.title = element_text(size = 20), 
-        legend.position = "none",
-        aspect.ratio = 1.25/1,
-        plot.margin=grid::unit(c(0,0,0,0), "pt"),
-        panel.background = element_blank())+
-  labs(y = "Normalized Score AUC", x = "")+
-   geom_hline(yintercept = 1)+
-  geom_signif(comparisons = list(c("PBS", "Sepi44_1x")), tip_length = 0)
-
-ggsave(paste(supp_outfolder, "supp_fig2_b_2.pdf", sep=""),  device = "pdf", dpi = 500, useDingbats = FALSE )
+  geom_text(data = sepi_1x_labs, mapping = aes(x = 1, y = 1.5, label = round(TEWL_p, 3)), color = "black")+
+  geom_text(data = sepi_1x_labs, mapping = aes(x = 2, y = 2.75, label = round(Score_p, 3)), color = "black")
 
 
-```
-
-
-### Figure 2: Doses across bugs
-1e08 comparison of s epi, s aureus and lacto
-
-```{r}
-
- low_dose = subset(all_spf, Cohort %in% c(2,3,7,9,11,14) & Organism %!in% c("Sepi21", "Coryne", "S_xylosus") & Dose != "1000000000")
-
-low_dose_auc = auc_per_mouse(low_dose)
-low_dose_auc_norm = auc_norm(low_dose_auc)
-
-
-low_dose_auc_norm$Organism = factor(low_dose_auc_norm$Organism, levels = c("PBS", "L_reuteri", "Sepi44", "S_aureus"))
-
-plotdf = subset(low_dose_auc_norm, Organism != "PBS")
-
-ggplot(plotdf,aes(x = Organism, y = TEWL_AUC_norm, color=Organism, fill=Organism))+
-    stat_summary(fun.y = median, geom = "errorbar", aes(ymax = ..y.., ymin = ..y.., color = "black"),
-                 width = .6,size = 1, alpha = 0.9)+
-  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 5, alpha = .5, method = "d", position = position_jitter(width = 0.3, seed = 123)) + 
-  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 5, shape = 1, color = "black", stroke = .8, method = "d", position = position_jitter(width = 0.3, seed = 123))+
-  scale_color_manual(values = spf_pals)+
-  scale_fill_manual(values= spf_pals)+
-  geom_hline(yintercept = 1)+
-  theme_classic()+
-  theme(panel.grid.major = element_blank(),
-        axis.text.x = element_text(size =18, angle = 45, hjust = 1), 
-        axis.text.y = element_text(size=18), axis.title = element_text(size = 20), 
-        legend.position = "none",
-        aspect.ratio = 1,
-        plot.margin=grid::unit(c(0,0,0,0), "pt"),
-        panel.background = element_blank())+
-  labs(y = "Normalized TEWL AUC", x = "")+
-  geom_signif(comparisons = list(c("L_reuteri", "Sepi44")), color = "black", step = 0.1)
-
-
-ggplot(plotdf,aes(x = Organism, y = Score_AUC_norm, color=Organism, fill=Organism))+
-    stat_summary(fun.y = median, geom = "errorbar", aes(ymax = ..y.., ymin = ..y.., color = "black"),
-                 width = .6,size = 1, alpha = 0.9)+
-  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 5, alpha = .5, method = "d", position = position_jitter(width = 0.3, seed = 123)) + 
-  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 5, shape = 1, color = "black", stroke = .8, method = "d", position = position_jitter(width = 0.3, seed = 123))+
-  scale_color_manual(values = spf_pals)+
-  scale_fill_manual(values= spf_pals)+
-   geom_hline(yintercept = 1)+
-  theme_classic()+
-  theme(panel.grid.major = element_blank(),
-        axis.text.x = element_text(size =18, angle = 45, hjust = 1), 
-        axis.text.y = element_text(size=18), axis.title = element_text(size = 20), 
-        legend.position = "none",
-        aspect.ratio = 1,
-        plot.margin=grid::unit(c(0,0,0,0), "pt"),
-        panel.background = element_blank())+
-  labs(y = "Normalized Score AUC", x = "")+
-  geom_signif(comparisons = list(c("L_reuteri", "Sepi44")), color = "black", step = 0.1)
-
-# Because we only did 1 rep of sepi and saureus, can we combine them?
-
-plotdf$Genus = sapply(plotdf$Organism, function(x) {ifelse(x == "L_reuteri", "Lacto", "Staph")})
-
-ggplot(plotdf,aes(x = Genus, y = TEWL_AUC_norm, color=Organism, fill=Organism))+
-    # stat_summary(fun.y = median, geom = "errorbar", aes(ymax = ..y.., ymin = ..y.., color = "black"),
-                 # width = .6,size = 1, alpha = 0.9)+
-  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 5, alpha = .5, method = "d", position = position_jitter(width = 0.3, seed = 123)) + 
-  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 5, shape = 1, color = "black", stroke = .8, method = "d", position = position_jitter(width = 0.3, seed = 123))+
-  scale_color_manual(values = spf_pals)+
-  scale_fill_manual(values= spf_pals)+
-  geom_hline(yintercept = 1)+
-  theme_classic()+
-  theme(panel.grid.major = element_blank(),
-        axis.text.x = element_text(size =18, angle = 45, hjust = 1), 
-        axis.text.y = element_text(size=18), axis.title = element_text(size = 20), 
-        legend.position = "none",
-        aspect.ratio = 1,
-        plot.margin=grid::unit(c(0,0,0,0), "pt"),
-        panel.background = element_blank())+
-  labs(y = "Normalized TEWL AUC", x = "")+
-  geom_signif(comparisons = list(c("Lacto", "Staph")), color = "black", step = 0.1)
-
-ggsave(paste(supp_outfolder, "supp_fig2_c_1.pdf", sep=""),  device = "pdf", dpi = 500, useDingbats = FALSE )
-
-
-ggplot(plotdf,aes(x = Genus, y = Score_AUC_norm, color=Organism, fill=Organism))+
-    # stat_summary(fun.y = median, geom = "errorbar", aes(ymax = ..y.., ymin = ..y.., color = "black"),
-    #              width = .6,size = 1, alpha = 0.9)+
-  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 5, alpha = .5, method = "d", position = position_jitter(width = 0.3, seed = 123)) + 
-  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 5, shape = 1, color = "black", stroke = .8, method = "d", position = position_jitter(width = 0.3, seed = 123))+
-  scale_color_manual(values = spf_pals)+
-  scale_fill_manual(values= spf_pals)+
-   geom_hline(yintercept = 1)+
-  theme_classic()+
-  theme(panel.grid.major = element_blank(),
-        axis.text.x = element_text(size =18, angle = 45, hjust = 1), 
-        axis.text.y = element_text(size=18), axis.title = element_text(size = 20), 
-        legend.position = "none",
-        aspect.ratio = 1,
-        plot.margin=grid::unit(c(0,0,0,0), "pt"),
-        panel.background = element_blank())+
-  labs(y = "Normalized Score AUC", x = "")+
-  geom_signif(comparisons = list(c("Lacto", "Staph")), color = "black", step = 0.1)
-
-
-ggsave(paste(supp_outfolder, "supp_fig2_c_2.pdf", sep=""),  device = "pdf", dpi = 500, useDingbats = FALSE )
-
-
+ggsave(paste(supp_outfolder, "supp_fig2_b.pdf", sep=""),  device = "pdf", dpi = 500, useDingbats = FALSE )
 
 
 ```
@@ -1714,6 +1617,81 @@ ggsave(paste(supp_outfolder, "supp_fig2_f.pdf", sep=""),  device = "pdf", dpi = 
 
 ```
 
+### Figure 2: Comparison of strains
+
+
+```{r}
+
+# Subset and merge all Sepi cohorts and killed cohorts
+
+# merge all sepi cohorts and killed cohorts
+
+two_sepi_df = subset(all_spf, Cohort %in% c(12, 14,27, 36,37) & Organism %in% c("PBS", "Sepi_NIH", "Sepi105") & Group %!in% c("control0", "group0", "7x_PBS-F", "5X_PBS", "5X_Sepi1e09", "10x_Sepi1e07", "Shominis930", "Sepi_SFB",  "PBS_SFB", "abx_sepi" ,"abx_pbs", "pbs_nots",  "sepi_nots"))
+
+# Remove one outlier mouse that was removed after d0, and mice that were removed for being weird outliers
+
+two_sepi_df = subset(two_sepi_df, !(Mouse == 5 & Group == "PBS" & Cohort == 12)& !(Mouse == 3 & Cohort ==17 & Group == "Sepi_HeatKilled")& !(Mouse == 4 & Cohort ==17 & Group == "Sepi_HeatKilled"))
+
+
+# Add in our Sepi44 data
+
+sepi_cohorts = unique(subset(all_spf, Organism == "Sepi44" & Cohort %!in% c(4,7, 8, 10, 13, 15, 16, 20, 24,25, 28,31,32,33,34,36,37))$Cohort)
+
+all_sepi44 = subset(all_spf, Cohort %in% sepi_cohorts & Organism %in% c("PBS", "Sepi44") & Group %!in% c("control0", "group0", "7x_PBS-F", "5X_PBS", "5X_Sepi1e09", "Shominis930", "Sepi_SFB",  "PBS_SFB", "abx_sepi" ,"abx_pbs" ) & Dose %in% c(0, 1e09))
+
+
+all_sepi_strains = rbind(two_sepi_df, all_sepi44)
+
+# AUC and normalise
+
+sepi_aucs = auc_per_mouse(subset(all_sepi_strains, Day <5))
+sepi_acus_norm = auc_norm(sepi_aucs)
+sepi_aucs_labs = sig_labels_auc_norm(sepi_acus_norm)
+
+sepi_acus_norm = subset(sepi_acus_norm, Organism %!in%  c("PBS"))
+
+sepi_acus_norm$Organism = factor(sepi_acus_norm$Organism, levels = c("Sepi44",  "Sepi105", "Sepi_NIH" ))
+sepi_aucs_labs$Organism = factor(sepi_aucs_labs$Organism, levels = c( "Sepi44",  "Sepi105", "Sepi_NIH" ))
+
+
+ggplot(sepi_acus_norm, aes(x = Organism, y = TEWL_AUC_norm, color = Organism, fill = Organism))+
+    geom_hline( yintercept = 1, color = "grey60", size = 0.5)+
+   geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 6, alpha = .5, method = "d", position = position_jitter(width = 0.2, seed = 123)) + 
+  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 6, shape = 1, color = "black", stroke = .4, method = "d", position = position_jitter(width = 0.2, seed = 123))+
+    stat_summary( fun.y = median, geom = "errorbar", aes(ymax = ..y.., ymin = ..y..), color = "black", width = .8,size = 1, alpha = 0.9)+
+  theme_classic()+
+    theme(panel.grid.major = element_blank(),
+          axis.text.x = element_text(size =12, hjust = 1, vjust = 1, angle = 45), 
+          axis.text.y = element_text(size=12), axis.title = element_text(size = 20), 
+          legend.position = "none")+ #aspect.ratio = 1/1.5
+  scale_color_manual(values = spf_pals)+
+  scale_fill_manual(values= spf_pals)+
+  # scale_y_continuous(limits = c(0.5, 2), breaks = seq(0.5,2.0,0.5))+
+  labs(y = "Normalized TEWL AUC", x = "")+
+  geom_signif(comparisons = list(c("Sepi44", "Sepi105"), c("Sepi105", "Sepi_NIH"), c("Sepi44", "Sepi_NIH")), step =0.1, color = "black", tip_length = 0)
+
+ggsave(paste(supp_outfolder, "fig2_f_1.pdf", sep="/"),  device = "pdf", dpi = 500,height = 6, width = 8 ,useDingbats = FALSE )
+
+  
+ggplot(sepi_acus_norm, aes(x = Organism, y = Score_AUC_norm, color = Organism, fill = Organism))+
+    geom_hline( yintercept = 1, color = "grey60", size = 0.5)+
+   geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 6, alpha = .5, method = "d", position = position_jitter(width = 0.2, seed = 123)) + 
+  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 6, shape = 1, color = "black", stroke = .4, method = "d", position = position_jitter(width = 0.2, seed = 123))+
+    stat_summary( fun.y = median, geom = "errorbar", aes(ymax = ..y.., ymin = ..y..), color = "black", width = .8,size = 1, alpha = 0.9)+
+  theme_classic()+
+    theme(panel.grid.major = element_blank(),
+          axis.text.x = element_text(size =12, hjust = 1, vjust = 1, angle = 45), 
+          axis.text.y = element_text(size=12), axis.title = element_text(size = 20), 
+          legend.position = "none")+ #aspect.ratio = 1/1.5
+  scale_color_manual(values = spf_pals)+
+  scale_fill_manual(values= spf_pals)+
+  # scale_y_continuous(limits = c(0.5, 2), breaks = seq(0.5,2.0,0.5))+
+  labs(y = "Normalized Score AUC", x = "")+
+  geom_signif(comparisons = list(c("Sepi44", "Sepi105"), c("Sepi105", "Sepi_NIH"), c("Sepi44", "Sepi_NIH")), step =0.1, color = "black", tip_length = 0)
+
+ggsave(paste(supp_outfolder, "fig2_f_2.pdf", sep="/"),  device = "pdf", dpi = 500,height = 6, width = 8 ,useDingbats = FALSE )
+
+```
 
 
 ## Figure 3:
@@ -2184,7 +2162,7 @@ ggplot(subset(sepinots_stats, Day >1))+
   geom_line(aes(x = Day, y = mean, color = Organism), alpha = 0.5, size =1 )+
   geom_ribbon(aes(x = Day, y = TEWL, ymin = mean - sem, ymax = mean+sem, color = Organism, fill = Organism), alpha = 0.1, color = NA)+
   scale_x_continuous(breaks = seq(0,4,1), expand = c(0,0))+
-  scale_y_continuous(breaks = seq(0,16,2))+
+  scale_y_cotntinuous(breaks = seq(0,16,2))+
   labs(x = "Day", y = "TEWL")+
     theme_classic() +
   theme(panel.grid.major = element_blank(),
@@ -2333,7 +2311,7 @@ ggplot(subset(sepi_stats, Condition != "Baseline"))+
   scale_color_manual(values = spf_pals, labels = c(expression("PBS"), expression(italic("S. epidermidis"))))+
   scale_fill_manual(values = spf_pals, guide = "none")+
   geom_line(aes(x = Day, y = mean, color = Organism), alpha = 0.5, size = 1 )+
-  geom_ribbon(aes(x = Day, y = TEWL, ymin = mean - sem, ymax = mean+sem, color = Organism, fill = Organism), alpha = 0.1, color = NA)+
+  geom_ribbon(aes(x = Day, y = TEWL, ymin = mean - sem, ymax = mean+sem, color = Organism, fill = Organism), alpha = 0.2, color = NA)+
   scale_x_continuous(breaks = seq(0,7,1), expand = c(0,0))+
   scale_y_continuous(breaks = seq(0,90,10))+
   labs(x = "Day", y = "TEWL")+
@@ -2349,13 +2327,56 @@ ggplot(subset(sepi_stats, Condition != "Baseline"))+
 
 ggsave(paste(supp_outfolder, "supp_fig6_a.pdf", sep="/"),  device = "pdf", dpi = 500,height = 6, width = 8 ,useDingbats = FALSE )
 
+sepi_stats %>%
+  filter(Condition != "Baseline" & Organism == "PBS") %>%
+ggplot(.)+
+  geom_point(aes(x = Day, y = mean, group=Organism,color = Organism), size = 4)+
+  scale_color_manual(values = spf_pals, labels = c(expression("PBS"), expression(italic("S. epidermidis"))))+
+  scale_fill_manual(values = spf_pals, guide = "none")+
+  geom_line(aes(x = Day, y = mean, color = Organism), alpha = 0.5, size = 1 )+
+  geom_ribbon(aes(x = Day, y = TEWL, ymin = mean - sem, ymax = mean+sem, color = Organism, fill = Organism), alpha = 0.2, color = NA)+
+  scale_x_continuous(breaks = seq(0,7,1), expand = c(0,0))+
+  scale_y_continuous(breaks = seq(0,90,10))+
+  labs(x = "Day", y = "TEWL")+
+    theme_classic() +
+  theme(panel.grid.major = element_blank(),
+        axis.text.x = element_text(size =16), 
+        axis.text.y = element_text(size=16),
+        axis.title = element_text(size = 20), 
+        axis.ticks.x = element_blank())+
+  theme(legend.position = c(0.2,0.1), 
+        legend.direction = "horizontal",
+       legend.title = element_blank() )
+
+
+sepi_stats %>%
+  filter(Condition != "Baseline" & Organism == "PBS" & Day >1) %>%
+ggplot(.)+
+  geom_point(aes(x = Day, y = score_mean, group=Organism,color = Organism), size = 4)+
+  scale_color_manual(values = spf_pals, labels = c(expression("PBS"), expression(italic("S. epidermidis"))))+
+  scale_fill_manual(values = spf_pals, guide = "none")+
+  geom_line(aes(x = Day, y = score_mean, color = Organism), alpha = 0.5, size = 1 )+
+  geom_ribbon(aes(x = Day, y = TEWL, ymin = score_mean - score_sem, ymax = score_mean+score_sem, color = Organism, fill = Organism), alpha = 0.2, color = NA)+
+  scale_x_continuous(breaks = seq(2,7,1), expand = c(0,0), limits = c(2,7))+
+  scale_y_continuous(breaks = seq(0,9,1), limits = c(0,9))+
+  labs(x = "Day", y = "Severity score")+
+    theme_classic() +
+  theme(panel.grid.major = element_blank(),
+        axis.text.x = element_text(size =16), 
+        axis.text.y = element_text(size=16),
+        axis.title = element_text(size = 20), 
+        axis.ticks.x = element_blank())+
+  theme(legend.position = c(0.2,0.1), 
+        legend.direction = "horizontal",
+       legend.title = element_blank() )
+
 
 ggplot(subset(sepi_stats, Condition != "Baseline" & Day > 1))+
   geom_point(aes(x = Day, y = score_mean, group=Organism,color = Organism), size = 4)+
   scale_color_manual(values = spf_pals, labels = c(expression("PBS"), expression(italic("S. epidermidis"))))+
   scale_fill_manual(values = spf_pals, guide = "none")+
   geom_line(aes(x = Day, y = score_mean, color = Organism), alpha = 0.5, size = 1 )+
-  geom_ribbon(aes(x = Day, y = TEWL, ymin = score_mean - score_sem, ymax = score_mean+score_sem, color = Organism, fill = Organism), alpha = 0.1, color = NA)+
+  geom_ribbon(aes(x = Day, y = TEWL, ymin = score_mean - score_sem, ymax = score_mean+score_sem, color = Organism, fill = Organism), alpha = 0.2, color = NA)+
   scale_x_continuous(breaks = seq(2,7,1), expand = c(0,0), limits = c(2,7))+
   scale_y_continuous(breaks = seq(0,9,1), limits = c(0,9))+
   labs(x = "Day", y = "Severity score")+
@@ -2562,7 +2583,7 @@ multi_elisa_melt$Protein = sapply(multi_elisa_melt$Protein, function(x) {ifelse 
 multi_elisa_melt_lo = subset(multi_elisa_melt, cutoff == "LO" )
 
 
-multi_elisa_melt_lo$Protein = factor(multi_elisa_melt_lo$Protein , levels = c("GM.CSF", "IL.12", "IL.4", "IL.5", "IL.13", "TGF.B", "IFN.G", "IL.1B", "il.17", "il.23", "il.27"))
+multi_elisa_melt_lo$Protein = factor(multi_elisa_melt_lo$Protein , levels = c("GM.CSF", "IL.12", "IL.4", "IL.5", "IL.13",  "IFN.G", "IL.1B", "il.17", "il.23", "il.27"))
 
 ggplot(multi_elisa_melt_lo, aes(x = Protein, y = value ))+
   geom_boxplot(aes(color=Group, fill = Group), alpha = 0.5, color = "grey20", lwd = .3)+
@@ -2573,11 +2594,11 @@ ggplot(multi_elisa_melt_lo, aes(x = Protein, y = value ))+
           axis.text.y = element_text(size=12), axis.title = element_text(size = 20), 
           legend.position = "none",
           aspect.ratio = 1/1.5)+
-  scale_x_discrete(labels = c("GM-CSF", "IL-12", "IL-4", "IL-5", "IL-13", "TGF-b", "IFN-g", "IL-1b", "IL-17", "IL-23", "IL-27"))+
+  scale_x_discrete(labels = c("GM-CSF", "IL-12", "IL-4", "IL-5", "IL-13", "IFN-g", "IL-1b", "IL-17", "IL-23", "IL-27"))+
   # facet_wrap(cutoff~., scales = "free")+
   scale_color_manual(values = spf_pals)+
-  annotate("segment", x = 8.75, xend = 9.5, y = 10, yend = 10, color = "black", linewidth = 1.25)+
-  annotate("text", x = 9.15, y = 12, label = "*", size = unit(14, "pt"))+
+  annotate("segment", x = 7.75, xend = 8.5, y = 10, yend = 10, color = "black", linewidth = 1.25)+
+  annotate("text", x = 8.15, y = 12, label = "*", size = unit(14, "pt"))+
   scale_fill_manual(values = spf_pals)+
   labs(x = "", y = "Protein ng/mL norm to total")
 
@@ -2721,29 +2742,33 @@ corr_analysis_ps = subset_samples(skin_samples, Timepoint == "Endpoint")
 # Species-only analysis
 
 corr_analysis_ps_sp = tax_glom(corr_analysis_ps, taxrank= "Species")
-corr_analysis_ps_sp = filter_taxa(corr_analysis_ps_sp, function(x) mean(x) > 0.01, TRUE) # taxa greater than 1%
+corr_analysis_ps_sp = prune_taxa(taxa_sums(corr_analysis_ps_sp) > 0, corr_analysis_ps_sp)
+corr_analysis_ps_sp = filter_taxa(corr_analysis_ps_sp, function(x){sum(x > 0.01) > 1}, prune = TRUE) # taxa that were observed at mor than 1% in at least one sample
+
+# corr_analysis_ps_sp = filter_taxa(corr_analysis_ps_sp, function(x) mean(x) > 0.01, TRUE) # taxa greater than 1%
 
 skin_otus = data.frame(t(corr_analysis_ps_sp@otu_table))
 taxadf = data.frame(corr_analysis_ps_sp@tax_table)
-
+ntax = ncol(skin_otus)
 
 spf29_auc_norm = subset(normalised_abx_auc_df, Cohort == "29")
 spf29_auc_norm$ID  = sapply(spf29_auc_norm$ID, function(x) {paste(strsplit(x, "_")[[1]][c(1,4)], collapse = "_")})
 skin_otus$Row.names = rownames(skin_otus)
 skin_otus$ID = sapply(skin_otus$Row.names, function(x) {paste(strsplit(x, "_")[[1]][c(3,4)], collapse = "_")})
 
+
 skin_otus = merge(skin_otus, spf29_auc_norm, by = "ID")
 
 # cor.test(skin_otus[,2], skin_otus$Score, method = "pearson")
 
 cordf_sp = data.frame()
-for (col in c(2:4)){
+for (col in c(2:ntax)){
   taxa = colnames(skin_otus)[col]
   taxa = ifelse(startsWith(taxa, "X"), substr(taxa,2,nchar(taxa)), taxa)
   taxa_names = taxadf[rownames(taxadf) == taxa,]
   sciname = paste(taxa_names$Genus, taxa_names$Species, sep = ".")
-  cortest = cor.test(skin_otus[,col], skin_otus[,9], method = "pearson")
-  cordf_sp = rbind(cordf_sp, data.frame("Taxa" = sciname, "Corr" = as.numeric(cortest$estimate), "P" = cortest$p.value))
+  cortest = cor.test(skin_otus[,col], skin_otus[, "Score_AUC_norm"], method = "pearson")
+  cordf_sp = rbind(cordf_sp, data.frame("Taxa" = sciname, "ps_name" =colnames(skin_otus)[col],  "Corr" = as.numeric(cortest$estimate), "P" = cortest$p.value))
 }
 
 # Lets do a quick BH correction
