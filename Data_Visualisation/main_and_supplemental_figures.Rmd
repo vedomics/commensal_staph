@@ -418,7 +418,7 @@ spf29_alex_ps_filt_norm = transform_sample_counts(spf29_alex_ps_filt, function(x
 skin_samples = subset_samples(spf29_alex_ps_filt_norm, Sample_Type == "skin")
 skin_samples = filter_taxa(skin_samples, function(x) sum(x) > 0, prune = TRUE)
 
-saveRDS(skin_samples, "../data/16s_data/classifier_output/skin_samples.rds")
+# saveRDS(skin_samples, "../data/16s_data/classifier_output/skin_samples.rds")
 
 # Only gut samples
 
@@ -435,7 +435,7 @@ gut_samples_noreps = merge_samples(gut_samples, "MergeNames" ) # some loss of me
 gut_samples_noreps = filter_taxa(gut_samples_noreps, function(x) sum(x) > 0, prune = TRUE)
 gut_samples_noreps_norm = transform_sample_counts(gut_samples_noreps, function(x) x/sum(x))
 
-saveRDS(gut_samples_noreps_norm, "../data/16s_data/classifier_output/gut_samples.rds")
+# saveRDS(gut_samples_noreps_norm, "../data/16s_data/classifier_output/gut_samples.rds")
 
 ```
 
@@ -1262,7 +1262,7 @@ thicc = read.csv("../data/supplement/forvk_ave_thickness_histology.csv")
 
 ggplot(subset(thicc, group %in% c("PBS", "Sepi44")), aes(x = thickness, y = score))+
     stat_smooth( method = "lm", stat = "identity", color = "grey40", alpha = 0.1, lwd = 2)+
-  geom_point(aes(color = group), size = 6, alpha = 0.6)+
+  geom_point(aes(color = group), size = 8, alpha = 0.6)+
   scale_color_manual(values = spf_pals)+
   labs(x = "Epidermal Thickness", y = "Severity Score")+
   scale_y_continuous(limits = c(0,8), breaks = seq(0, 8,1))+
@@ -1387,6 +1387,10 @@ summarise(Score_AUC = auc(Day, complete_score, type = "spline"))
 
 sepi_dose_auc = left_join(sepi_dose_auc_tewl, sepi_dose_auc_score)
 
+sepi_dose_summary = sepi_dose_auc %>%
+  group_by(Organism, Dose) %>%
+  tally()
+
 # Now normalise by cohort and dose
   
   normalised_dose_auc = group_by(filter(sepi_dose_auc, Organism == "PBS"),Cohort) %>%
@@ -1431,19 +1435,29 @@ dose_auc_labs = dose_auc_labs %>%
   plotdf = subset(normalised_dose_auc, Organism == "Sepi44")
   plotdf$Dose = factor(plotdf$Dose, levels = c(10,10000000, 100000000, 1000000000))
   
-ggplot(plotdf,aes(x = Dose, y = TEWL_AUC_norm, color=Organism, fill=Organism))+
-  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 5, alpha = .5, method = "d", position = position_jitter(width = 0.3, seed = 123)) +
-  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 5, shape = 1, color = "black", stroke = .8, method = "d", position = position_jitter(width = 0.3, seed = 123))+
+  # New plotting idea
+  plotdf = plotdf %>%
+    filter(Dose %in% c( 10,1000000000) )%>%
+    mutate(CFU = case_when(Cohort == 2 & Dose == 10 ~ "1e8",
+                           Cohort == 5 & Dose == 10 ~ "1e7",
+                           TRUE ~ "1e9")) # for plotting purposes
+  
+  dose_colors = c("1e9" = "#0073C2FF", "1e8" = "#00c2b0", "1e7" = "#0012c2")
+  
+
+ggplot(plotdf,aes(x = Dose, y = TEWL_AUC_norm))+
+  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 5, alpha = .5, method = "d", position = position_jitter(width = 0.3, seed = 123), aes(color=CFU, fill=CFU)) +
+  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 5, shape = 1, color = "black", stroke = .8, method = "d", position = position_jitter(width = 0.3, seed = 123), aes(color=CFU, fill=CFU))+
   stat_summary(fun.y = median, geom = "errorbar", aes(ymax = ..y.., ymin = ..y.., color = "black"),
                  width = .6,size = 1, alpha = 0.9)+
-  scale_x_discrete(labels= c("Low","1e7", "1e8", "1e9"))+
-  scale_color_manual(values = spf_pals)+
-  scale_fill_manual(values= spf_pals)+
+  scale_x_discrete(labels= c("Low","1e9"))+
+  scale_color_manual(values = dose_colors)+
+  scale_fill_manual(values= dose_colors)+
   theme_classic()+
   theme(panel.grid.major = element_blank(),
         axis.text.x = element_text(size =18), 
         axis.text.y = element_text(size=18), axis.title = element_text(size = 20), 
-        legend.position = "none",
+        # legend.position = "none",
         aspect.ratio = 1.25/1,
         plot.margin=grid::unit(c(0,0,0,0), "pt"),
         panel.background = element_blank())+
@@ -1453,15 +1467,14 @@ ggplot(plotdf,aes(x = Dose, y = TEWL_AUC_norm, color=Organism, fill=Organism))+
 
 ggsave(paste(supp_outfolder, "supp_fig2_a_1.pdf", sep=""),  device = "pdf", dpi = 500, useDingbats = FALSE )
 
-
-ggplot(plotdf,aes(x = Dose, y = Score_AUC_norm, color=Organism, fill=Organism))+
+ggplot(plotdf,aes(x = Dose, y = Score_AUC_norm, color=CFU, fill=CFU))+
     stat_summary(fun.y = median, geom = "errorbar", aes(ymax = ..y.., ymin = ..y.., color = "black"),
                  width = .6,size = 1, alpha = 0.9)+
-  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 5, alpha = .5, method = "d", position = position_jitter(width = 0.3, seed = 123)) + 
-  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 5, shape = 1, color = "black", stroke = .8, method = "d", position = position_jitter(width = 0.3, seed = 123))+
-   scale_x_discrete(labels= c("low","1e7", "1e8", "1e9"))+
-  scale_color_manual(values = spf_pals)+
-  scale_fill_manual(values= spf_pals)+
+  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 5, alpha = .5, method = "d", position = position_jitter(width = 0.3, seed = 123), aes(color=CFU, fill=CFU)) + 
+  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 5, shape = 1, color = "black", stroke = .8, method = "d", position = position_jitter(width = 0.3, seed = 123), aes(color=CFU, fill=CFU))+
+  scale_x_discrete(labels= c("Low","1e9"))+
+  scale_color_manual(values = dose_colors)+
+  scale_fill_manual(values= dose_colors)+
   theme_classic()+
   theme(panel.grid.major = element_blank(),
         axis.text.x = element_text(size =18), 
@@ -1846,8 +1859,8 @@ skin_rich_pval  = ifelse(skin_rich_pval < 0.001, "p<0.001", round(skin_rich_pval
 ggplot(subset(skin_rich, Timepoint == "Endpoint"), aes(x = Group, y = value, fill = Group, color = Group))+
   stat_summary(fun.y = median, geom = "errorbar", aes(ymax = ..y.., ymin = ..y.., color = "black"),
                  width = .6,size = 1, alpha = 0.9)+
-  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 5, alpha = .5, method = "d") + 
-  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 5, shape = 1, color = "black", stroke = .8, method = "d")+
+  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 7, alpha = .5, method = "d") + 
+  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 7, shape = 1, color = "black", stroke = .8, method = "d")+
   scale_x_discrete(labels = c("Control", "Antibiotic-treated"))+
   theme_classic()+
   scale_color_manual(values = abx_pals)+
@@ -1949,8 +1962,8 @@ gut_rich_pval  = ifelse(gut_rich_pval < 0.001, "p<0.001", round(gut_rich_pval, 3
 ggplot(gut_rich, aes(x = Group, y = value, color= Group, fill = Group))+
 stat_summary(fun.y = median, geom = "errorbar", aes(ymax = ..y.., ymin = ..y.., color = "black"),
                  width = .6,size = 1, alpha = 0.9)+
-  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 5, alpha = .5, method = "d") + 
-  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 5, shape = 1, color = "black", stroke = .8, method = "d")+
+  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 7, alpha = .5, method = "d") + 
+  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 7, shape = 1, color = "black", stroke = .8, method = "d")+
   scale_x_discrete(labels = c("Control", "Antibiotic-treated"))+
   theme_classic()+
   scale_color_manual(values = abx_pals)+
@@ -1982,17 +1995,20 @@ qpcr = read.csv("../data/supplement/skin_gut_16s_au.csv", header = TRUE)
 qpcr = subset(qpcr, Source %in% c("Skin", "Fecal"))
 qpcr$Group = factor(qpcr$Group, levels = c("Ctrl", "Abx"))
 
+scientific_10 <- function(x) {
+  parse(text=gsub("e\\+*", " %*% 10^", scales::scientific_format()(x)))
+}
+
 ggplot(subset(qpcr, Timepoint == "Endpoint" & Source == "Fecal"), aes(x = Group, y = AU, fill = Group, color = Group))+
   stat_summary(fun.y = median, geom = "errorbar", aes(ymax = ..y.., ymin = ..y.., color = "black"),
                  width = .6,size = 1, alpha = 0.9)+
-  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 5, alpha = .5, method = "d") + 
-  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 5, shape = 1, color = "black", stroke = .8, method = "d")+
+  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 8, alpha = .5, method = "d") + 
+  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 8, shape = 1, color = "black", stroke = .8, method = "d")+
   scale_x_discrete(labels = c("Control", "Antibiotic"))+
   theme_classic()+
   scale_color_manual(values = abx_pals)+
   scale_fill_manual(values = abx_pals)+
-  scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),
-        labels = trans_format("log10", math_format(10^.x)))+
+  scale_y_continuous(label=scientific_10)+
   labs(x = "", y = "Au")+
   theme(strip.background = element_blank(), 
         strip.text = element_blank(), 
@@ -2009,14 +2025,13 @@ ggsave(paste(supp_outfolder, "supp_fig3_i.pdf", sep="/"),  device = "pdf", dpi =
 ggplot(subset(qpcr, Timepoint == "Endpoint" & Source == "Skin"), aes(x = Group, y = AU, fill = Group, color = Group))+
   stat_summary(fun.y = median, geom = "errorbar", aes(ymax = ..y.., ymin = ..y.., color = "black"),
                  width = .6,size = 1, alpha = 0.9)+
-  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 5, alpha = .5, method = "d") + 
-  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 5, shape = 1, color = "black", stroke = .8, method = "d")+
+  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 8, alpha = .5, method = "d") + 
+  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 8, shape = 1, color = "black", stroke = .8, method = "d")+
   scale_x_discrete(labels = c("Control", "Antibiotic"))+
   theme_classic()+
   scale_color_manual(values = abx_pals)+
   scale_fill_manual(values = abx_pals)+
-  scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),
-        labels = trans_format("log10", math_format(10^.x)))+
+  scale_y_continuous(label=scientific_10)+
   labs(x = "", y = "Au")+
   theme(strip.background = element_blank(), 
         strip.text = element_blank(), 
@@ -2059,8 +2074,8 @@ mrsa$Day = factor(mrsa$Day)
 ggplot(subset(mrsa, Condition != "Baseline"& Day !=0), aes(x = Day, y = TEWL, color = Organism, fill = Organism))+
     stat_summary(fun.y = median, geom = "errorbar", aes(ymax = ..y.., ymin = ..y..,),
                  width = .6,size = 1, alpha = 0.9, position = position_dodge(width = 1))+
-  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 5, alpha = .5, method = "d", position = position_dodge(width = 1)) + 
-  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 5, shape = 1, color = "black", stroke = .8, method = "d", position = position_dodge(width = 1))+
+  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 8, alpha = .5, method = "d", position = position_dodge(width = 1)) + 
+  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 8, shape = 1, color = "black", stroke = .8, method = "d", position = position_dodge(width = 1))+
     scale_color_manual(values = spf_pals)+
     scale_fill_manual(values = spf_pals)+
     theme_classic()
@@ -2072,8 +2087,8 @@ ggsave(paste(supp_outfolder, "supp_fig4_a_1.pdf", sep="/"),  device = "pdf", dpi
  ggplot(subset(mrsa, Day %!in% c(0,1)), aes(x = Day, y = complete_score, color = Organism, fill = Organism))+
     stat_summary(fun.y = median, geom = "errorbar", aes(ymax = ..y.., ymin = ..y..,),
                  width = .6,size = 1, alpha = 0.9, position = position_dodge(width = 1))+
-  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 5, alpha = .5, method = "d", position = position_dodge(width = 1)) + 
-  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 5, shape = 1, color = "black", stroke = .8, method = "d", position = position_dodge(width = 1))+
+  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 8, alpha = .5, method = "d", position = position_dodge(width = 1)) + 
+  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 8, shape = 1, color = "black", stroke = .8, method = "d", position = position_dodge(width = 1))+
     scale_color_manual(values = spf_pals)+
     scale_fill_manual(values = spf_pals)+
     theme_classic()
@@ -2254,11 +2269,12 @@ for (Group in unique(subset(df2, Group != "PBS_PBS")$Group)){
 ggplot(precol_aucs_norm, aes(x = Group, y = TEWL_AUC_norm, color = Group, fill = Group))+
     stat_summary(fun.y = median, geom = "errorbar", aes(ymax = ..y.., ymin = ..y.., color = "black"),
                  width = .6,size = 1, alpha = 0.9)+
-  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 5, alpha = .5, method = "d", position = position_jitter(width = 0.25, seed = 123)) + 
-  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 5, shape = 1, color = "black", stroke = .8, method = "d", position = position_jitter(width = 0.25, seed = 123))+
+  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 8, alpha = .5, method = "d", position = position_jitter(width = 0.25, seed = 123)) + 
+  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 8, shape = 1, color = "black", stroke = .8, method = "d", position = position_jitter(width = 0.25, seed = 123))+
     scale_color_manual(values = precol_pals)+
     scale_fill_manual(values = precol_pals)+
     theme_classic()+
+  theme(aspect.ratio = 1/1.5)+
     geom_signif(comparisons = list(c("PBS_PBS", "Sepi_PBS"),c("PBS_Sepi", "Sepi_Sepi"), c("PBS_PBS", "PBS_Sepi"), c("PBS_PBS", "Sepi_Sepi") ), step =0.1, color = "black", tip_length = 0 )
   
 ggsave(paste(supp_outfolder, "supp_fig5_d_1.pdf", sep="/"),  device = "pdf", dpi = 500,height = 6, width = 8 ,useDingbats = FALSE )
@@ -2267,11 +2283,12 @@ ggsave(paste(supp_outfolder, "supp_fig5_d_1.pdf", sep="/"),  device = "pdf", dpi
 ggplot(precol_aucs_norm, aes(x = Group, y = Score_AUC_norm, color = Group, fill = Group))+
        stat_summary(fun.y = median, geom = "errorbar", aes(ymax = ..y.., ymin = ..y.., color = "black"),
                  width = .6,size = 1, alpha = 0.9)+
-  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 5, alpha = .5, method = "d", position = position_jitter(width = 0.25, seed = 123)) + 
-  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 5, shape = 1, color = "black", stroke = .8, method = "d", position = position_jitter(width = 0.25, seed = 123))+
+  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 8, alpha = .5, method = "d", position = position_jitter(width = 0.25, seed = 123)) + 
+  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 8, shape = 1, color = "black", stroke = .8, method = "d", position = position_jitter(width = 0.25, seed = 123))+
     scale_color_manual(values = precol_pals)+
     scale_fill_manual(values = precol_pals)+
       theme_classic()+
+  theme(aspect.ratio = 1/1.5)+
     geom_signif(comparisons = list(c("PBS_PBS", "Sepi_PBS"),c("PBS_Sepi", "Sepi_Sepi"), c("PBS_PBS", "PBS_Sepi"), c("PBS_PBS", "Sepi_Sepi") ), step =0.1, color = "black", tip_length = 0 )
 
 
@@ -2432,8 +2449,8 @@ tcell_pval = wilcox.test(subset(spf1_par_stats, Group %in% c("Control1") & Tissu
 ggplot(subset(spf1_par_stats, Group %in% c("Control1", "Group1") & Tissue == "Skin"), aes(x = Group, y = CD45_CD3_of_Live, color = Group, fill = Group))+
   stat_summary(fun.y = median, geom = "errorbar", aes(ymax = ..y.., ymin = ..y.., color = "black"),
                  width = .6,size = 1, alpha = 0.9)+
-  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 5, alpha = .5, method = "d") + 
-  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 5, shape = 1, color = "black", stroke = .8, method = "d")+
+  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 8, alpha = .5, method = "d") + 
+  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 8, shape = 1, color = "black", stroke = .8, method = "d")+
   labs(y= "% T cells")+
   scale_color_manual(values = color_pals)+
   annotate(geom = "text", x = 2, y = 2.5, label = round(tcell_pval,3), parse = T)+
@@ -2451,8 +2468,8 @@ ggsave(paste(supp_outfolder, "supp_fig6_c_1.pdf", sep="/"),  device = "pdf", dpi
 ggplot(subset(spf1_par_stats, Group %in% c("Control0", "Group0") & Tissue == "Skin"), aes(x = Group, y = CD45_CD3_of_Live, color = Group, fill = Group))+
   stat_summary(fun.y = median, geom = "errorbar", aes(ymax = ..y.., ymin = ..y.., color = "black"),
                  width = .6,size = 1, alpha = 0.9)+
-  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 5, alpha = .5, method = "d") + 
-  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 5, shape = 1, color = "black", stroke = .8, method = "d")+
+  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 8, alpha = .5, method = "d") + 
+  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 8, shape = 1, color = "black", stroke = .8, method = "d")+
   labs(y= "% T cells")+
   scale_color_manual(values = color_pals)+
    geom_signif(comparisons = list(c("Control0", "Group0")))+
@@ -2504,8 +2521,8 @@ geom_signif(comparisons = list(c("Control1", "Group1"), step = 0.1))+
 ggplot(gdtcell, aes(x = Group, y = TCRg_of_DN, color = Group, fill = Group))+
   stat_summary(fun.y = median, geom = "errorbar", aes(ymax = ..y.., ymin = ..y.., color = "black"),
                  width = .6,size = 1, alpha = 0.9, position = position_dodge(width = 1))+
-  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 5, alpha = .5, method = "d", position = position_jitterdodge(jitter.width = 0.25, dodge.width = 1, seed = 123)) + 
-  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 5, shape = 1, color = "black", stroke = .8, method = "d", position = position_jitterdodge(jitter.width = 0.25, dodge.width = 1, seed = 123))+
+  geom_sina(maxwidth = .7, scale = "area", seed = 1,size = 8, alpha = .5, method = "d", position = position_jitterdodge(jitter.width = 0.25, dodge.width = 1, seed = 123)) + 
+  geom_sina(maxwidth = .7, scale = "area", seed = 1, size = 8, shape = 1, color = "black", stroke = .8, method = "d", position = position_jitterdodge(jitter.width = 0.25, dodge.width = 1, seed = 123))+
   scale_fill_manual(values = color_pals)+
   scale_color_manual(values = color_pals)+
 geom_signif(comparisons = list(c("Control1", "Group1"), step = 0.1), tip_length = 0)+
@@ -2768,8 +2785,11 @@ for (col in c(2:ntax)){
   taxa_names = taxadf[rownames(taxadf) == taxa,]
   sciname = paste(taxa_names$Genus, taxa_names$Species, sep = ".")
   cortest = cor.test(skin_otus[,col], skin_otus[, "Score_AUC_norm"], method = "pearson")
-  cordf_sp = rbind(cordf_sp, data.frame("Taxa" = sciname, "ps_name" =colnames(skin_otus)[col],  "Corr" = as.numeric(cortest$estimate), "P" = cortest$p.value))
+  mean_abund = mean(skin_otus[,col], na.rm = T)
+  cordf_sp = rbind(cordf_sp, data.frame("Taxa" = sciname, "ps_name" =colnames(skin_otus)[col], "Abundance" = mean_abund,  "Corr" = as.numeric(cortest$estimate), "P" = cortest$p.value))
 }
+
+write.csv(cordf_sp, paste(supp_outfolder, "corr_table.csv", sep = "/"))
 
 # Lets do a quick BH correction
 
